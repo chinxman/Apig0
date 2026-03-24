@@ -1,0 +1,16 @@
+# Apig0 — persistent configuration
+# Settings here survive restarts. Environment variables always override these.
+# Do NOT store secrets in this file (no tokens, passwords, or TOTP secrets).
+
+vault:
+  type: env                        # env | hashicorp | aws | gcp | azure | cyberark | 1password | http | exec
+  address: http://127.0.0.1:8200   # hashicorp only
+  engine: secret                   # hashicorp only — KV engine name
+  secret_path: totp                # logical group name (default: totp)
+  secret_key: secret               # key inside secret data (default: secret)
+
+gateway:
+  users: devin                     # comma-separated user list
+  port: "8080"
+  session_ttl: 8h                  # e.g. 8h, 30m, 24h
+  show_qr: false

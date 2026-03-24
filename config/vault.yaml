@@ -1,0 +1,149 @@
+# =============================================================================
+# Apig0 — Vault Configuration Reference
+# =============================================================================
+#
+# Set VAULT_TYPE to choose your secret backend. All config is via env vars.
+# Set APIG0_USERS to a comma-separated list of users (default: devin).
+#
+# Common env vars (all providers):
+#   VAULT_TYPE          — env, hashicorp, aws, gcp, azure, cyberark, 1password, http, exec
+#   VAULT_SECRET_PATH   — logical group name (default: totp)
+#   VAULT_SECRET_KEY    — key inside secret data (default: secret)
+#   APIG0_USERS         — comma-separated user list (default: devin)
+#
+# =============================================================================
+
+
+# ─── env (default) ──────────────────────────────────────────────────────────
+# No vault server needed. Secrets come from environment variables.
+#
+#   VAULT_TYPE=env
+#   APIG0_TOTP_SECRET_DEVIN=BASE32SECRET
+#   APIG0_TOTP_SECRET_ALICE=ANOTHERBASE32
+#   APIG0_USERS=devin,alice
+
+
+# ─── hashicorp ──────────────────────────────────────────────────────────────
+# HashiCorp Vault with KV v2 engine.
+#
+#   VAULT_TYPE=hashicorp
+#   VAULT_ADDRESS=http://192.168.12.10:8200
+#   VAULT_ENGINE=secret
+#
+#   Token auth:
+#     VAULT_TOKEN=hvs.your-token
+#
+#   AppRole auth:
+#     VAULT_ROLE_ID=your-role-id
+#     VAULT_SECRET_ID=your-secret-id
+#
+#   Store secrets:
+#     vault kv put secret/totp/devin secret=BASE32SECRET
+#     vault kv put secret/totp/alice secret=ANOTHERBASE32
+
+
+# ─── aws ────────────────────────────────────────────────────────────────────
+# AWS Secrets Manager. Requires `aws` CLI installed and authenticated.
+#
+#   VAULT_TYPE=aws
+#   AWS_REGION=us-east-1
+#
+#   Store secrets:
+#     aws secretsmanager create-secret --name totp/devin --secret-string BASE32SECRET
+#     aws secretsmanager create-secret --name totp/alice --secret-string ANOTHERBASE32
+
+
+# ─── gcp ────────────────────────────────────────────────────────────────────
+# Google Cloud Secret Manager. Requires `gcloud` CLI installed and authenticated.
+#
+#   VAULT_TYPE=gcp
+#   GCP_PROJECT=my-project-id
+#
+#   Store secrets:
+#     echo -n "BASE32SECRET" | gcloud secrets create totp-devin --data-file=- --project=my-project-id
+#     echo -n "ANOTHERBASE32" | gcloud secrets create totp-alice --data-file=- --project=my-project-id
+
+
+# ─── azure ──────────────────────────────────────────────────────────────────
+# Azure Key Vault. Requires `az` CLI installed and authenticated.
+#
+#   VAULT_TYPE=azure
+#   AZURE_VAULT_NAME=my-keyvault
+#
+#   Store secrets:
+#     az keyvault secret set --vault-name my-keyvault --name totp-devin --value BASE32SECRET
+#     az keyvault secret set --vault-name my-keyvault --name totp-alice --value ANOTHERBASE32
+
+
+# ─── cyberark ───────────────────────────────────────────────────────────────
+# CyberArk CCP (Central Credential Provider) via REST API.
+#
+#   VAULT_TYPE=cyberark
+#   CYBERARK_ADDRESS=https://cyberark.company.com
+#   CYBERARK_APP_ID=Apig0
+#   CYBERARK_SAFE=TOTP-Safe
+#   CYBERARK_FOLDER=Root
+#
+#   Store secrets via CyberArk PVWA:
+#     Object name: totp-devin, totp-alice (in the configured safe)
+
+
+# ─── 1password ──────────────────────────────────────────────────────────────
+# 1Password via `op` CLI. Requires CLI installed and signed in.
+#
+#   VAULT_TYPE=1password
+#   OP_VAULT=Private
+#
+#   Store secrets:
+#     op item create --category=login --title=totp-devin --vault=Private secret=BASE32SECRET
+#     op item create --category=login --title=totp-alice --vault=Private secret=ANOTHERBASE32
+
+
+# ─── http (generic) ─────────────────────────────────────────────────────────
+# Any REST API. Use {{path}} and {{key}} placeholders in URL/body.
+#
+#   VAULT_TYPE=http
+#   VAULT_HTTP_URL=https://my-api.com/secrets/{{path}}/{{key}}
+#   VAULT_HTTP_METHOD=GET
+#   VAULT_HTTP_HEADER=Authorization: Bearer mytoken
+#   VAULT_HTTP_JSON_PATH=data.value
+#   VAULT_HTTP_BASE64=false
+#
+#   POST example:
+#     VAULT_HTTP_URL=https://my-api.com/secrets
+#     VAULT_HTTP_METHOD=POST
+#     VAULT_HTTP_BODY={"path":"{{path}}","key":"{{key}}"}
+#     VAULT_HTTP_JSON_PATH=result.secret
+
+
+# ─── exec (generic) ─────────────────────────────────────────────────────────
+# Run any shell command. Use {{path}} and {{key}} placeholders.
+# Command stdout (trimmed) = the secret value.
+#
+#   VAULT_TYPE=exec
+#   VAULT_EXEC_COMMAND=my-custom-tool get-secret {{path}}/{{key}}
+#
+#   Examples:
+#     VAULT_EXEC_COMMAND=cat /opt/secrets/{{key}}.txt
+#     VAULT_EXEC_COMMAND=kubectl get secret {{key}} -o jsonpath='{.data.totp}' | base64 -d
+#     VAULT_EXEC_COMMAND=pass show apig0/{{path}}/{{key}}
+
+
+# =============================================================================
+# Adding a custom provider:
+#
+#   1. Implement VaultInterface in config/vault_providers.go:
+#
+#        type MyVault struct { ... }
+#        func (v *MyVault) LoadSecret(path, key string) (string, error) { ... }
+#        func (v *MyVault) Health() error { ... }
+#        func (v *MyVault) String() string { return "myvault" }
+#
+#   2. Add constructor: func NewMyVault(cfg *VaultConfig) (*MyVault, error)
+#
+#   3. Register in CreateVault() switch in config/vault.go:
+#        case "myvault":
+#            return NewMyVault(cfg)
+#
+#   Or just use VAULT_TYPE=http or VAULT_TYPE=exec to avoid writing Go code.
+# =============================================================================

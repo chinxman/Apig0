@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apig0 Gateway Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #1a1b26;
+      color: #e0e0e0;
+    }
+    h1 { color: #7aa2f7; margin-bottom: 10px; }
+    h2 { color: #bb9af7; margin-top: 30px; border-bottom: 1px solid #444; padding-bottom: 8px; }
+    .card {
+      background: #16161e;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 15px 0;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #0d0d12;
+      border-radius: 6px;
+      margin: 8px 0;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.ok { background: #9ece6a; box-shadow: 0 0 8px rgba(158,206,106,0.5); }
+    .dot.warn { background: #fab387; box-shadow: 0 0 8px rgba(250,179,135,0.5); }
+    .dot.error { background: #f7768e; box-shadow: 0 0 8px rgba(247,118,142,0.5); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th { text-align: left; padding: 12px; background: #28293d; color: #7aa2f7; font-weight: 600; }
+    td { padding: 12px; border-bottom: 1px solid #2f334d; }
+    tr:last-child td { border-bottom: none; }
+    .qr-box {
+      text-align: center;
+      padding: 25px;
+      background: #0d0d12;
+      border-radius: 8px;
+      border: 1px solid #2f334d;
+    }
+    .qr-box img { margin: 15px 0; border-radius: 8px; }
+    .secret {
+      font-family: monospace;
+      background: #16161e;
+      padding: 8px 12px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 8px;
+      letter-spacing: 1px;
+    }
+    button {
+      background: #7aa2f7;
+      color: #1a1b26;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #3d72c4; }
+    .endpoint {
+      display: inline-block;
+      background: #2f334d;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #9ece6a;
+      margin: 4px 0;
+    }
+    .loading { color: #bb9af7; }
+    .code-input {
+      background: #0d0d12;
+      border: 1px solid #2f334d;
+      color: #e0e0e0;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: monospace;
+      width: 100%;
+      margin: 8px 0;
+    }
+    .result { margin-top: 10px; padding: 10px; border-radius: 6px; font-family: monospace; }
+    .result.success { background: #1f2a1e; color: #9ece6a; }
+    .result.fail { background: #2a1e1e; color: #f7768e; }
+  </style>
+</head>
+<body>
+  <h1>Apig0 Gateway Dashboard</h1>
+  <p>Gateway: <strong>http://192.168.12.192:8080</strong></p>
+
+  <!-- Health Check -->
+  <div class="card">
+    <h2>Health Check</h2>
+    <div class="status-row">
+      <div id="health-dot" class="dot warn"></div>
+      <div id="health-status" class="loading">Checking gateway health...</div>
+    </div>
+  </div>
+
+  <!-- Routes -->
+  <div class="card">
+    <h2 id="routes-title">Bridge Routes</h2>
+    <p>All routes require <code>X-TOTP</code> header for authentication.</p>
+    <table id="routes-table">
+      <thead>
+        <tr>
+          <th>Path</th>
+          <th>Method</th>
+          <th>Target Service</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="routes-body">
+        <tr data-path="/users/*" data-service="192.168.12.11:3001">
+          <td><span class="endpoint">/users/*</span></td>
+          <td>ANY</td>
+          <td>192.168.12.11:3001</td>
+          <td><span class="endpoint loading" id="status-users">Checking...</span></td>
+        </tr>
+        <tr data-path="/products/*" data-service="192.168.12.11:3002">
+          <td><span class="endpoint">/products/*</span></td>
+          <td>ANY</td>
+          <td>192.168.12.11:3002</td>
+          <td><span class="endpoint loading" id="status-products">Checking...</span></td>
+        </tr>
+        <tr data-path="/orders/*" data-service="192.168.12.11:3003">
+          <td><span class="endpoint">/orders/*</span></td>
+          <td>ANY</td>
+          <td>192.168.12.11:3003</td>
+          <td><span class="endpoint loading" id="status-orders">Checking...</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TOTP Setup -->
+  <div class="card">
+    <h2>TOTP Authentication</h2>
+    <div class="qr-box">
+      <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=otpauth%3A%2F%2Ftotp%2FApig0%3Adevin%3Fsecret%3DWECNPPUPNEXZDYNNDBJYIPHJWUXXCQ5P%26issuer%3DApig0" alt="TOTP QR Code">
+      <p><strong>Secret:</strong></p>
+      <div class="secret">WECNPPUPNEXZDYNNDBJYIPHJWUXXCQ5P</div>
+      <p style="font-size: 12px; color: #888;">Note: Use the same secret for testing if code doesn't work</p>
+    </div>
+  </div>
+
+  <!-- Test Console -->
+  <div class="card">
+    <h2>Test Console</h2>
+    <div id="console-status" style="margin-bottom: 15px;"></div>
+
+    <label><strong>Enter TOTP Code:</strong></label>
+    <input type="text" id="totp-code" class="code-input" placeholder="Enter 6-digit TOTP code..." autocomplete="off">
+
+    <button onclick="testHealth()">Test /healthz</button>
+    <button onclick="testService('users')">Test /users</button>
+    <button onclick="testService('products')">Test /products</button>
+    <button onclick="testService('orders')">Test /orders</button>
+
+    <div id="test-result" style="margin-top: 15px;"></div>
+  </div>
+
+  <script>
+    const GATEWAY = 'http://192.168.12.192:8080';
+
+    // Check health on load
+    window.addEventListener('load', () => {
+      checkHealth();
+      checkRoutes();
+      // Refresh routes every 30 seconds
+      setInterval(checkRoutes, 30000);
+    });
+
+    async function checkHealth() {
+      const dot = document.getElementById('health-dot');
+      const status = document.getElementById('health-status');
+
+      try {
+        const resp = await fetch(`${GATEWAY}/healthz`);
+        if (resp.ok) {
+          dot.className = 'dot ok';
+          status.textContent = 'Gateway is healthy ✅';
+          status.style.color = '#9ece6a';
+          document.getElementById('routes-title').textContent = 'Bridge Routes';
+          document.getElementById('routes-title').style.color = '#bb9af7';
+        } else {
+          dot.className = 'dot error';
+          status.textContent = 'Gateway returned error ❌';
+          status.style.color = '#f7768e';
+        }
+      } catch (err) {
+        dot.className = 'dot error';
+        status.textContent = 'Cannot reach gateway (check IP/network) ❌';
+        status.style.color = '#f7768e';
+        document.getElementById('routes-title').textContent = 'Bridge Routes (Gateway Unreachable)';
+        document.getElementById('routes-title').style.color = '#f7768e';
+      }
+    }
+
+    async function checkRoutes() {
+      const routes = [
+        { path: '/users', target: '192.168.12.11:3001', id: 'status-users' },
+        { path: '/products', target: '192.168.12.11:3002', id: 'status-products' },
+        { path: '/orders', target: '192.168.12.11:3003', id: 'status-orders' }
+      ];
+
+      for (const route of routes) {
+        const el = document.getElementById(route.id);
+        if (!el) continue;
+
+        try {
+          const resp = await fetch(`http://${route.target}${route.path}`, {
+            method: 'HEAD',
+            timeout: 3000
+          });
+          if (resp.ok || resp.status === 200) {
+            el.textContent = 'Online';
+            el.className = 'endpoint ok';
+          } else {
+            el.textContent = 'Error';
+            el.className = 'endpoint warn';
+          }
+        } catch (err) {
+          el.textContent = 'Offline';
+          el.className = 'endpoint error';
+        }
+      }
+    }
+
+    function showResult(message, success) {
+      const div = document.getElementById('test-result');
+      div.className = `result ${success ? 'success' : 'fail'}`;
+      div.textContent = message;
+    }
+
+    async function testHealth() {
+      const code = document.getElementById('totp-code').value;
+      if (!code) {
+        showResult('⚠️ Please enter a TOTP code first', false);
+        return;
+      }
+      document.getElementById('test-result').textContent = 'Testing...';
+
+      try {
+        const resp = await fetch(`${GATEWAY}/healthz`, {
+          headers: { 'X-TOTP': code }
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          showResult(`✅ Success: ${JSON.stringify(data)}`, true);
+        } else {
+          showResult(`❌ ${resp.status}: ${JSON.stringify(data)}`, false);
+        }
+      } catch (err) {
+        showResult(`❌ Network error: ${err.message}`, false);
+      }
+    }
+
+    async function testService(service) {
+      const code = document.getElementById('totp-code').value;
+      if (!code) {
+        showResult('⚠️ Please enter a TOTP code first', false);
+        return;
+      }
+      document.getElementById('test-result').textContent = `Testing ${service}...`;
+
+      try {
+        const resp = await fetch(`${GATEWAY}/${service}`, {
+          method: 'GET',
+          headers: { 'X-TOTP': code }
+        });
+        const data = await resp.text();
+
+        if (resp.ok) {
+          showResult(`✅ ${service} (HTTP ${resp.status})\nResponse: ${data.slice(0, 200)}${data.length > 200 ? '...' : ''}`, true);
+        } else {
+          showResult(`❌ ${service} (HTTP ${resp.status})\nResponse: ${data.slice(0, 200)}`, false);
+        }
+      } catch (err) {
+        showResult(`❌ Network error for ${service}: ${err.message}`, false);
+      }
+    }
+  </script>
+</body>
+</html>
