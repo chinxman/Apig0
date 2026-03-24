@@ -71,9 +71,9 @@ func main() {
 	r.POST("/auth/verify", auth.VerifyHandler)
 	r.POST("/auth/logout", auth.LogoutHandler)
 
-	// Admin endpoints — session required
+	// Admin endpoints — session + admin role required
 	admin := r.Group("/api/admin")
-	admin.Use(auth.SessionMiddleware())
+	admin.Use(auth.AdminMiddleware())
 	admin.GET("/events", mon.SSEHandler())
 	admin.GET("/stats", mon.StatsHandler())
 	admin.GET("/users", auth.ListUsersHandler)

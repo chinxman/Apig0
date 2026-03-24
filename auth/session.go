@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"apig0/config"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -106,6 +108,30 @@ func SessionMiddleware() gin.HandlerFunc {
 			return
 		}
 		c.Set("session_user", user)
+		c.Next()
+	}
+}
+
+// AdminMiddleware requires a valid session AND admin role.
+// Returns 403 if the user is authenticated but not an admin.
+func AdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tok, err := c.Cookie("apig0_session")
+		if err != nil || tok == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		user, ok := ValidateSession(tok)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired"})
+			return
+		}
+		c.Set("session_user", user)
+
+		if config.GetUserStore() != nil && config.GetUserStore().GetRole(user) != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+			return
+		}
 		c.Next()
 	}
 }

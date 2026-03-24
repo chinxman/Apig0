@@ -65,7 +65,11 @@ func VerifyHandler(c *gin.Context) {
 	tok := NewSession(user)
 	maxAge := int(SessionTTL().Seconds())
 	c.SetCookie("apig0_session", tok, maxAge, "/", "", false, true)
-	c.JSON(http.StatusOK, gin.H{"ok": true, "user": user})
+	role := ""
+	if store := config.GetUserStore(); store != nil {
+		role = store.GetRole(user)
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "user": user, "role": role})
 }
 
 // LogoutHandler clears the session cookie and removes the server-side session.

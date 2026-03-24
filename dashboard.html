@@ -838,6 +838,8 @@ async function checkAuth() {
     const resp = await fetch(GATEWAY + '/api/admin/stats');
     if (resp.status === 401) {
       showLogin();
+    } else if (resp.status === 403) {
+      window.location.replace('/portal');
     } else {
       // Session already valid (e.g. page refresh) — restore the logout button
       const user = localStorage.getItem('apig0_user') || '';
@@ -917,6 +919,7 @@ async function submitPassword() {
     document.getElementById('step-password').classList.remove('active');
     document.getElementById('step-totp').classList.add('active');
     document.getElementById('login-totp').focus();
+
   } catch {
     setLoginErr('err-password', 'Network error');
   } finally {
@@ -938,6 +941,11 @@ async function submitTOTP() {
     const data = await resp.json();
     if (!resp.ok) {
       setLoginErr('err-totp', data.error || 'Verification failed');
+      return;
+    }
+    // Non-admin users get redirected to the portal
+    if (data.role && data.role !== 'admin') {
+      window.location.replace('/portal');
       return;
     }
     hideLogin(data.user);
