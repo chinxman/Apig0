@@ -20,14 +20,13 @@ var UserPasswords = map[string]string{}
 // Call this early in main() before using UserSecrets.
 // Secrets are NEVER hardcoded — they must come from vault or env vars.
 func InitSecrets() {
-	// Load from the configured vault backend (hashicorp or env)
 	LoadVaultSecrets()
 	LoadUserPasswords()
+	InitUserStore("users.json")
 
 	if len(UserSecrets) == 0 {
 		log.Println("[config] WARNING: no TOTP secrets loaded")
 		log.Println("[config] Set APIG0_TOTP_SECRET_<USER> env vars, or configure a vault backend")
-		log.Println("[config] See config/vault.yaml for vault setup instructions")
 	}
 }
 
@@ -58,8 +57,14 @@ func LoadUserPasswords() {
 	}
 }
 
-// ValidatePassword checks a plaintext password against the stored bcrypt hash for user.
+// ValidatePassword checks a plaintext password. Checks the userstore first
+// (vault-backed or file), then falls back to env-var loaded passwords.
 func ValidatePassword(user, password string) bool {
+	if store := GetUserStore(); store != nil {
+		if store.ValidatePassword(user, password) {
+			return true
+		}
+	}
 	hash, ok := UserPasswords[user]
 	if !ok {
 		return false

@@ -53,12 +53,20 @@ func main() {
 		serviceProxies[name] = proxy.NewReverseProxy(backend)
 	}
 
+	// Load rate limits from file
+	config.LoadRateLimits()
+
 	// Dashboard (public — login overlay gates access in the browser)
 	r.GET("/dashboard", func(c *gin.Context) {
 		c.File("dashboard.html")
 	})
 
-	// Auth endpoints — no TOTP, no session required
+	// User portal
+	r.GET("/portal", func(c *gin.Context) {
+		c.File("user.html")
+	})
+
+	// Auth endpoints — no session required
 	r.POST("/auth/login", auth.LoginHandler)
 	r.POST("/auth/verify", auth.VerifyHandler)
 	r.POST("/auth/logout", auth.LogoutHandler)
@@ -68,14 +76,27 @@ func main() {
 	admin.Use(auth.SessionMiddleware())
 	admin.GET("/events", mon.SSEHandler())
 	admin.GET("/stats", mon.StatsHandler())
+	admin.GET("/users", auth.ListUsersHandler)
+	admin.POST("/users", auth.CreateUserHandler)
+	admin.DELETE("/users/:user", auth.DeleteUserHandler)
+	admin.POST("/users/:user/reset", auth.ResetTOTPHandler)
+	admin.GET("/settings/ratelimits", auth.GetRateLimitsHandler)
+	admin.POST("/settings/ratelimits", auth.SaveRateLimitsHandler)
+
+	// User info endpoint — session required
+	r.GET("/api/user/info", auth.SessionMiddleware(), func(c *gin.Context) {
+		user, _ := c.Get("user")
+		role := config.GetUserStore().GetRole(user.(string))
+		c.JSON(200, gin.H{"user": user, "role": role})
+	})
 
 	// Health-check
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// Catch-all proxy — session required
-	r.NoRoute(auth.SessionMiddleware(), func(c *gin.Context) {
+	// Catch-all proxy — session + rate limit required
+	r.NoRoute(auth.SessionMiddleware(), middleware.RateLimit(), func(c *gin.Context) {
 		path := strings.TrimPrefix(c.Request.URL.Path, "/")
 		if path == "" {
 			c.Next()

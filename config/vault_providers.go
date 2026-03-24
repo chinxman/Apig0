@@ -133,6 +133,65 @@ func (v *HashicorpVault) LoadSecret(secretPath string, key string) (string, erro
 	return str, nil
 }
 
+func (v *HashicorpVault) StoreSecret(secretPath, key, value string) error {
+	url := fmt.Sprintf("%s/v1/%s/data/%s/%s", v.address, v.engine, secretPath, key)
+	body, _ := json.Marshal(map[string]interface{}{
+		"data": map[string]string{v.secretKey: value},
+	})
+	req, _ := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	req.Header.Set("X-Vault-Token", v.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := v.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("vault store: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("vault store HTTP %d: %s", resp.StatusCode, b)
+	}
+	return nil
+}
+
+func (v *HashicorpVault) DeleteSecret(secretPath, key string) error {
+	url := fmt.Sprintf("%s/v1/%s/data/%s/%s", v.address, v.engine, secretPath, key)
+	req, _ := http.NewRequest("DELETE", url, nil)
+	req.Header.Set("X-Vault-Token", v.token)
+	resp, err := v.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("vault delete: %w", err)
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (v *HashicorpVault) ListKeys(secretPath string) ([]string, error) {
+	url := fmt.Sprintf("%s/v1/%s/metadata/%s", v.address, v.engine, secretPath)
+	req, _ := http.NewRequest("LIST", url, nil)
+	req.Header.Set("X-Vault-Token", v.token)
+	resp, err := v.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("vault list: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return []string{}, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("vault list HTTP %d: %s", resp.StatusCode, b)
+	}
+	var result struct {
+		Data struct {
+			Keys []string `json:"keys"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Data.Keys, nil
+}
+
 func (v *HashicorpVault) Health() error {
 	req, _ := http.NewRequest("GET", v.address+"/v1/sys/health", nil)
 	req.Header.Set("X-Vault-Token", v.token)
@@ -184,6 +243,15 @@ func (v *CLIVault) Health() error {
 	return nil
 }
 
+func (v *CLIVault) StoreSecret(secretPath, key, value string) error {
+	return fmt.Errorf("%s: %w", v.name, ErrReadOnly)
+}
+func (v *CLIVault) DeleteSecret(secretPath, key string) error {
+	return fmt.Errorf("%s: %w", v.name, ErrReadOnly)
+}
+func (v *CLIVault) ListKeys(secretPath string) ([]string, error) {
+	return nil, fmt.Errorf("%s: %w", v.name, ErrReadOnly)
+}
 func (v *CLIVault) String() string { return v.name }
 
 // requireCLI checks that a binary exists in PATH.
@@ -420,6 +488,15 @@ func (v *CyberArkVault) Health() error {
 	return nil
 }
 
+func (v *CyberArkVault) StoreSecret(secretPath, key, value string) error {
+	return fmt.Errorf("cyberark: %w", ErrReadOnly)
+}
+func (v *CyberArkVault) DeleteSecret(secretPath, key string) error {
+	return fmt.Errorf("cyberark: %w", ErrReadOnly)
+}
+func (v *CyberArkVault) ListKeys(secretPath string) ([]string, error) {
+	return nil, fmt.Errorf("cyberark: %w", ErrReadOnly)
+}
 func (v *CyberArkVault) String() string { return "cyberark" }
 
 // ===================================================================
@@ -531,6 +608,15 @@ func (v *HTTPVault) LoadSecret(secretPath string, key string) (string, error) {
 	return result, nil
 }
 
+func (v *HTTPVault) StoreSecret(secretPath, key, value string) error {
+	return fmt.Errorf("http vault: %w", ErrReadOnly)
+}
+func (v *HTTPVault) DeleteSecret(secretPath, key string) error {
+	return fmt.Errorf("http vault: %w", ErrReadOnly)
+}
+func (v *HTTPVault) ListKeys(secretPath string) ([]string, error) {
+	return nil, fmt.Errorf("http vault: %w", ErrReadOnly)
+}
 func (v *HTTPVault) Health() error { return nil }
 func (v *HTTPVault) String() string { return "http" }
 
@@ -573,6 +659,15 @@ func (v *ExecVault) LoadSecret(secretPath string, key string) (string, error) {
 	return result, nil
 }
 
+func (v *ExecVault) StoreSecret(secretPath, key, value string) error {
+	return fmt.Errorf("exec vault: %w", ErrReadOnly)
+}
+func (v *ExecVault) DeleteSecret(secretPath, key string) error {
+	return fmt.Errorf("exec vault: %w", ErrReadOnly)
+}
+func (v *ExecVault) ListKeys(secretPath string) ([]string, error) {
+	return nil, fmt.Errorf("exec vault: %w", ErrReadOnly)
+}
 func (v *ExecVault) Health() error  { return nil }
 func (v *ExecVault) String() string { return "exec" }
 

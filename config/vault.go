@@ -10,9 +10,17 @@ import (
 // VaultInterface is the universal contract for any secret backend.
 // Implement this to add support for a new vault provider.
 type VaultInterface interface {
-	// LoadSecret fetches a secret. secretPath is the logical group (e.g. "totp"),
-	// key is the identifier within that group (e.g. a username).
+	// LoadSecret fetches a secret value by path and key.
 	LoadSecret(secretPath string, key string) (string, error)
+
+	// StoreSecret writes a secret value. Returns ErrReadOnly if not supported.
+	StoreSecret(secretPath string, key string, value string) error
+
+	// DeleteSecret removes a secret. Returns ErrReadOnly if not supported.
+	DeleteSecret(secretPath string, key string) error
+
+	// ListKeys returns all keys under a path. Returns ErrReadOnly if not supported.
+	ListKeys(secretPath string) ([]string, error)
 
 	// Health returns nil if the backend is reachable and authenticated.
 	Health() error
@@ -20,6 +28,9 @@ type VaultInterface interface {
 	// String returns the provider name for logging.
 	String() string
 }
+
+// ErrReadOnly is returned by vault backends that do not support write operations.
+var ErrReadOnly = fmt.Errorf("vault backend is read-only")
 
 // VaultConfig holds the common configuration shared by all providers.
 // Provider-specific settings are read from their own env vars.
@@ -95,6 +106,24 @@ func (v *EnvVault) LoadSecret(secretPath string, key string) (string, error) {
 	return "", fmt.Errorf("set %s or APIG0_TOTP_SECRET", envName)
 }
 
+func (v *EnvVault) StoreSecret(secretPath, key, value string) error {
+	UserSecrets[key] = value
+	return nil
+}
+
+func (v *EnvVault) DeleteSecret(secretPath, key string) error {
+	delete(UserSecrets, key)
+	return nil
+}
+
+func (v *EnvVault) ListKeys(secretPath string) ([]string, error) {
+	keys := make([]string, 0, len(UserSecrets))
+	for k := range UserSecrets {
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
 func (v *EnvVault) Health() error  { return nil }
 func (v *EnvVault) String() string { return "env" }
 
@@ -140,6 +169,27 @@ func LoadVaultSecrets() {
 		UserSecrets[user] = secret
 		log.Printf("[vault] loaded secret for %q", user)
 	}
+}
+
+// StoreUserSecret stores a TOTP secret for a user in the active vault and in memory.
+func StoreUserSecret(username, secret string) error {
+	cfg := LoadVaultConfig()
+	if activeVault != nil {
+		if err := activeVault.StoreSecret(cfg.SecretPath, username, secret); err != nil {
+			return err
+		}
+	}
+	UserSecrets[username] = secret
+	return nil
+}
+
+// DeleteUserSecret removes a user's TOTP secret from the active vault and memory.
+func DeleteUserSecret(username string) {
+	cfg := LoadVaultConfig()
+	if activeVault != nil {
+		activeVault.DeleteSecret(cfg.SecretPath, username)
+	}
+	delete(UserSecrets, username)
 }
 
 // LoadUserSecret fetches a single user's secret on demand.
