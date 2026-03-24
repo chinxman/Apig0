@@ -25,7 +25,7 @@ var globalRateLimiter = &RateLimiter{buckets: make(map[string]*bucket)}
 
 func RateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user, _ := c.Get("user")
+		user, _ := c.Get("session_user")
 		key, _ := user.(string)
 		if key == "" {
 			key = c.ClientIP()
@@ -55,7 +55,11 @@ func (rl *RateLimiter) allow(key string, rule config.RateLimitRule) bool {
 	rl.mu.Lock()
 	b, ok := rl.buckets[key]
 	if !ok {
-		b = &bucket{tokens: float64(rule.Burst), lastRefil: time.Now()}
+		burst := rule.Burst
+	if burst <= 0 {
+		burst = 1
+	}
+	b = &bucket{tokens: float64(burst), lastRefil: time.Now()}
 		rl.buckets[key] = b
 	}
 	rl.mu.Unlock()
