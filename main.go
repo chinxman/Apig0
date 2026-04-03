@@ -8,7 +8,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net/http"
+	"os"
 	"strings"
 
 	"apig0/auth"
@@ -56,24 +59,28 @@ func main() {
 	// Load rate limits from file
 	config.LoadRateLimits()
 
-	// Dashboard (public — login overlay gates access in the browser)
+	// Unified WebUI — login overlay gates access, role determines visible panels.
+	// Admin data still requires AdminMiddleware on /api/admin/*.
+	r.GET("/", func(c *gin.Context) {
+		c.File("webui.html")
+	})
 	r.GET("/dashboard", func(c *gin.Context) {
-		c.File("dashboard.html")
+		c.Redirect(301, "/")
 	})
-
-	// User portal
 	r.GET("/portal", func(c *gin.Context) {
-		c.File("user.html")
+		c.Redirect(301, "/")
 	})
 
-	// Auth endpoints — no session required
-	r.POST("/auth/login", auth.LoginHandler)
-	r.POST("/auth/verify", auth.VerifyHandler)
+	// Auth endpoints — no session required, but rate-limited to prevent brute force
+	// CSRF exempt: these are pre-authentication or use non-cookie credentials.
+	r.POST("/auth/login", middleware.RateLimit(), auth.LoginHandler)
+	r.POST("/auth/verify", middleware.RateLimit(), auth.VerifyHandler)
 	r.POST("/auth/logout", auth.LogoutHandler)
 
-	// Admin endpoints — session + admin role required
+	// Admin endpoints — session + admin role + CSRF required
 	admin := r.Group("/api/admin")
 	admin.Use(auth.AdminMiddleware())
+	admin.Use(middleware.CSRF())
 	admin.GET("/events", mon.SSEHandler())
 	admin.GET("/stats", mon.StatsHandler())
 	admin.GET("/users", auth.ListUsersHandler)
@@ -83,9 +90,9 @@ func main() {
 	admin.GET("/settings/ratelimits", auth.GetRateLimitsHandler)
 	admin.POST("/settings/ratelimits", auth.SaveRateLimitsHandler)
 
-	// User info endpoint — session required
-	r.GET("/api/user/info", auth.SessionMiddleware(), func(c *gin.Context) {
-		user, _ := c.Get("user")
+	// User info endpoint — session + rate limit required
+	r.GET("/api/user/info", auth.SessionMiddleware(), middleware.RateLimit(), func(c *gin.Context) {
+		user, _ := c.Get("session_user")
 		role := config.GetUserStore().GetRole(user.(string))
 		c.JSON(200, gin.H{"user": user, "role": role})
 	})
@@ -95,8 +102,8 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// Catch-all proxy — session + rate limit required
-	r.NoRoute(auth.SessionMiddleware(), middleware.RateLimit(), func(c *gin.Context) {
+	// Catch-all proxy — session + rate limit + CSRF required
+	r.NoRoute(auth.SessionMiddleware(), middleware.CSRF(), middleware.RateLimit(), func(c *gin.Context) {
 		path := strings.TrimPrefix(c.Request.URL.Path, "/")
 		if path == "" {
 			c.Next()
@@ -113,7 +120,42 @@ func main() {
 		c.JSON(404, gin.H{"error": "service not found"})
 	})
 
-	log.Println("Apig0 gateway running on :8080")
-	log.Println("Dashboard: http://0.0.0.0:8080/dashboard")
-	r.Run(":8080")
+	port := os.Getenv("APIG0_PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	tlsCfg := config.LoadTLSConfig()
+
+	if tlsCfg.Mode != config.TLSOff {
+		// TLS is active — auto-enable secure cookies
+		os.Setenv("APIG0_SECURE", "true")
+
+		httpsAddr := ":" + port
+		log.Printf("Apig0 gateway running on %s (HTTPS)", httpsAddr)
+		log.Printf("WebUI: https://0.0.0.0:%s/", port)
+		log.Printf("TLS cert: %s", tlsCfg.CertFile)
+
+		// Optional: redirect HTTP → HTTPS on port 8080 if HTTPS is on a different port
+		if port != "8080" {
+			go func() {
+				redirect := http.NewServeMux()
+				redirect.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+					target := fmt.Sprintf("https://%s:%s%s", r.Host, port, r.URL.RequestURI())
+					http.Redirect(w, r, target, http.StatusMovedPermanently)
+				})
+				log.Println("HTTP redirect on :8080 → HTTPS")
+				http.ListenAndServe(":8080", redirect)
+			}()
+		}
+
+		if err := r.RunTLS(httpsAddr, tlsCfg.CertFile, tlsCfg.KeyFile); err != nil {
+			log.Fatalf("[tls] failed to start: %v", err)
+		}
+	} else {
+		addr := ":" + port
+		log.Printf("Apig0 gateway running on %s (HTTP)", addr)
+		log.Printf("WebUI: http://0.0.0.0:%s/", port)
+		r.Run(addr)
+	}
 }

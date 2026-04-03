@@ -96,9 +96,9 @@ func (m *Monitor) RegisterService(name, backend string) {
 // request, stores it in the ring buffer, and broadcasts to SSE subscribers.
 func (m *Monitor) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Don't monitor admin/dashboard endpoints (avoid feedback loop)
+		// Don't monitor admin/UI endpoints (avoid feedback loop)
 		path := c.Request.URL.Path
-		if strings.HasPrefix(path, "/api/admin/") || path == "/dashboard" {
+		if strings.HasPrefix(path, "/api/admin/") || path == "/dashboard" || path == "/portal" || path == "/" {
 			c.Next()
 			return
 		}
@@ -217,10 +217,19 @@ func (m *Monitor) SSEHandler() gin.HandlerFunc {
 		}()
 
 		ctx := c.Request.Context()
+		heartbeat := time.NewTicker(15 * time.Second)
+		defer heartbeat.Stop()
+
 		for {
 			select {
 			case msg := <-ch:
 				_, err := c.Writer.Write(msg)
+				if err != nil {
+					return
+				}
+				c.Writer.Flush()
+			case <-heartbeat.C:
+				_, err := fmt.Fprintf(c.Writer, ": heartbeat\n\n")
 				if err != nil {
 					return
 				}
@@ -281,7 +290,9 @@ func (m *Monitor) recentEvents() []*RequestEvent {
 	}
 	for i := 0; i < m.ringLen; i++ {
 		idx := (start + i) % maxRecentEvents
-		result = append(result, m.ring[idx])
+		if m.ring[idx] != nil {
+			result = append(result, m.ring[idx])
+		}
 	}
 	return result
 }

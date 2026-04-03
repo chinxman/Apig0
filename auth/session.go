@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"strings"
 
 	"apig0/config"
 
@@ -23,6 +24,32 @@ var (
 	challenges = map[string]sessionEntry{}
 	sessions   = map[string]sessionEntry{}
 )
+
+func init() {
+	// Sweep expired sessions and challenges every 60 seconds.
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		for range ticker.C {
+			sweepExpired()
+		}
+	}()
+}
+
+func sweepExpired() {
+	now := time.Now()
+	mu.Lock()
+	defer mu.Unlock()
+	for k, e := range challenges {
+		if now.After(e.expires) {
+			delete(challenges, k)
+		}
+	}
+	for k, e := range sessions {
+		if now.After(e.expires) {
+			delete(sessions, k)
+		}
+	}
+}
 
 // SessionTTL returns the configured session lifetime.
 // Reads APIG0_SESSION_TTL as a Go duration string (e.g. "8h", "30m", "24h").
@@ -134,6 +161,42 @@ func AdminMiddleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// IsSecure returns true when the gateway should set Secure cookies.
+// Looks at APIG0_SECURE env var ("true"/"false"). Defaults to false
+// since TLS is not yet configured — set APIG0_SECURE=true once TLS is added.
+func IsSecure() bool {
+	if v := os.Getenv("APIG0_SECURE"); strings.EqualFold(v, "true") {
+		return true
+	}
+	return false
+}
+
+// SetSessionCookie writes the session cookie with Secure + SameSite=Strict.
+func SetSessionCookie(c *gin.Context, tok string) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "apig0_session",
+		Value:    tok,
+		Path:     "/",
+		MaxAge:   int(SessionTTL().Seconds()),
+		Secure:   IsSecure(),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// ClearSessionCookie removes the session cookie.
+func ClearSessionCookie(c *gin.Context) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "apig0_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Secure:   IsSecure(),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
 }
 
 func randHex(n int) string {

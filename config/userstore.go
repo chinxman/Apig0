@@ -95,6 +95,28 @@ func (s *UserStore) Create(username, password, role string) error {
 	return nil
 }
 
+// CreateWithHash adds a user with a pre-hashed password (used during bootstrap
+// when passwords are already hashed from env vars).
+func (s *UserStore) CreateWithHash(username, passHash, role string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.cache[username]; exists {
+		return fmt.Errorf("user %q already exists", username)
+	}
+	u := &User{
+		Username:  username,
+		PassHash:  passHash,
+		Role:      role,
+		CreatedAt: time.Now(),
+	}
+	if err := s.persist(u); err != nil {
+		return err
+	}
+	s.cache[username] = u
+	return nil
+}
+
 func (s *UserStore) Delete(username string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

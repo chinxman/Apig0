@@ -20,11 +20,18 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	if IsLockedOut(req.Username) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked, try again later"})
+		return
+	}
+
 	if !config.ValidatePassword(req.Username, req.Password) {
+		RecordFailure(req.Username)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 
+	ClearFailures(req.Username)
 	c.JSON(http.StatusOK, gin.H{"challenge": NewChallenge(req.Username)})
 }
 
@@ -63,8 +70,7 @@ func VerifyHandler(c *gin.Context) {
 	ConsumeChallenge(req.Challenge)
 
 	tok := NewSession(user)
-	maxAge := int(SessionTTL().Seconds())
-	c.SetCookie("apig0_session", tok, maxAge, "/", "", false, true)
+	SetSessionCookie(c, tok)
 	role := ""
 	if store := config.GetUserStore(); store != nil {
 		role = store.GetRole(user)
@@ -78,6 +84,6 @@ func LogoutHandler(c *gin.Context) {
 	if tok, err := c.Cookie("apig0_session"); err == nil {
 		DeleteSession(tok)
 	}
-	c.SetCookie("apig0_session", "", -1, "/", "", false, true)
+	ClearSessionCookie(c)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

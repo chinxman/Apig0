@@ -25,6 +25,7 @@ type gatewayYAML struct {
 	Port       string `yaml:"port"`
 	SessionTTL string `yaml:"session_ttl"`
 	ShowQR     bool   `yaml:"show_qr"`
+	TLS        string `yaml:"tls"`
 }
 
 // LoadAppConfig reads apig0.yaml from the working directory and sets any
@@ -54,6 +55,7 @@ func LoadAppConfig() {
 	setDefault("APIG0_USERS", cfg.Gateway.Users)
 	setDefault("APIG0_PORT", cfg.Gateway.Port)
 	setDefault("APIG0_SESSION_TTL", cfg.Gateway.SessionTTL)
+	setDefault("APIG0_TLS", cfg.Gateway.TLS)
 	if cfg.Gateway.ShowQR {
 		setDefault("APIG0_SHOW_QR", "true")
 	}

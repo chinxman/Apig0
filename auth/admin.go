@@ -48,7 +48,12 @@ func CreateUserHandler(c *gin.Context) {
 		"otpauth://totp/Apig0:%s?secret=%s&issuer=Apig0&algorithm=SHA1&digits=6&period=30",
 		url.PathEscape(req.Username), secret,
 	)
-	c.JSON(http.StatusOK, gin.H{"username": req.Username, "role": req.Role, "otpauth": otpauth})
+	c.JSON(http.StatusOK, gin.H{
+		"username": req.Username,
+		"role":     req.Role,
+		"otpauth":  otpauth,
+		"qr":       GenerateQRDataURI(otpauth),
+	})
 }
 
 // GET /api/admin/users
@@ -105,7 +110,11 @@ func ResetTOTPHandler(c *gin.Context) {
 		"otpauth://totp/Apig0:%s?secret=%s&issuer=Apig0&algorithm=SHA1&digits=6&period=30",
 		url.PathEscape(username), secret,
 	)
-	c.JSON(http.StatusOK, gin.H{"username": username, "otpauth": otpauth})
+	c.JSON(http.StatusOK, gin.H{
+		"username": username,
+		"otpauth":  otpauth,
+		"qr":       GenerateQRDataURI(otpauth),
+	})
 }
 
 // GET /api/admin/settings/ratelimits

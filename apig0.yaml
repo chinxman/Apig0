@@ -3,8 +3,8 @@
 # Do NOT store secrets in this file (no tokens, passwords, or TOTP secrets).
 
 vault:
-  type: env                        # env | hashicorp | aws | gcp | azure | cyberark | 1password | http | exec
-  address: http://127.0.0.1:8200   # hashicorp only
+  type: hashicorp                  # env | hashicorp | aws | gcp | azure | cyberark | 1password | http | exec
+  address: http://192.168.12.13:8200   # hashicorp only
   engine: secret                   # hashicorp only — KV engine name
   secret_path: totp                # logical group name (default: totp)
   secret_key: secret               # key inside secret data (default: secret)
@@ -14,3 +14,4 @@ gateway:
   port: "8080"
   session_ttl: 8h                  # e.g. 8h, 30m, 24h
   show_qr: false
+  tls: auto                        # auto | off | /path/cert.pem,/path/key.pem

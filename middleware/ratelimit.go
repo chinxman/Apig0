@@ -23,6 +23,31 @@ type RateLimiter struct {
 
 var globalRateLimiter = &RateLimiter{buckets: make(map[string]*bucket)}
 
+func init() {
+	// Sweep stale rate-limit buckets every 5 minutes.
+	// A bucket is stale if it hasn't been refilled in over 10 minutes.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
+			globalRateLimiter.sweep()
+		}
+	}()
+}
+
+func (rl *RateLimiter) sweep() {
+	cutoff := time.Now().Add(-10 * time.Minute)
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	for key, b := range rl.buckets {
+		b.mu.Lock()
+		stale := b.lastRefil.Before(cutoff)
+		b.mu.Unlock()
+		if stale {
+			delete(rl.buckets, key)
+		}
+	}
+}
+
 func RateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, _ := c.Get("session_user")

@@ -23,10 +23,48 @@ func InitSecrets() {
 	LoadVaultSecrets()
 	LoadUserPasswords()
 	InitUserStore("users.json")
+	bootstrapUsers()
 
 	if len(UserSecrets) == 0 {
 		log.Println("[config] WARNING: no TOTP secrets loaded")
 		log.Println("[config] Set APIG0_TOTP_SECRET_<USER> env vars, or configure a vault backend")
+	}
+}
+
+// bootstrapUsers ensures that every user with a loaded password also exists
+// in the UserStore. The first user listed in APIG0_USERS gets the "admin" role;
+// all others default to "user". This solves the chicken-and-egg problem where
+// env-var passwords are hashed but never registered in the store.
+func bootstrapUsers() {
+	store := GetUserStore()
+	if store == nil {
+		return
+	}
+
+	users := "devin"
+	if u := os.Getenv("APIG0_USERS"); u != "" {
+		users = u
+	}
+	userList := strings.Split(users, ",")
+
+	for i, user := range userList {
+		user = strings.TrimSpace(user)
+		if user == "" {
+			continue
+		}
+		if store.Exists(user) {
+			continue
+		}
+		hash, ok := UserPasswords[user]
+		if !ok {
+			continue
+		}
+		role := "user"
+		if i == 0 {
+			role = "admin"
+		}
+		store.CreateWithHash(user, hash, role)
+		log.Printf("[config] bootstrapped user %q (role: %s)", user, role)
 	}
 }
 
