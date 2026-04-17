@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	"apig0/config"
 
@@ -118,6 +118,13 @@ func DeleteSession(tok string) {
 	mu.Lock()
 	delete(sessions, tok)
 	mu.Unlock()
+}
+
+func ResetSessionState() {
+	mu.Lock()
+	defer mu.Unlock()
+	challenges = map[string]sessionEntry{}
+	sessions = map[string]sessionEntry{}
 }
 
 // SessionMiddleware rejects requests without a valid apig0_session cookie.

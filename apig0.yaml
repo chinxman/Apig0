@@ -3,14 +3,15 @@
 # Do NOT store secrets in this file (no tokens, passwords, or TOTP secrets).
 
 vault:
-  type: hashicorp                  # env | hashicorp | aws | gcp | azure | cyberark | 1password | http | exec
-  address: http://192.168.12.13:8200   # hashicorp only
-  engine: secret                   # hashicorp only — KV engine name
+  type: ""                         # leave blank for clean-slate boot; setup flow chooses the backend
+  address: ""                      # hashicorp only
+  engine: ""                       # hashicorp only — KV engine name
   secret_path: totp                # logical group name (default: totp)
   secret_key: secret               # key inside secret data (default: secret)
+  file_path: totp-secrets.json     # file only — local persistent TOTP store for web-created users
 
 gateway:
-  users: devin                     # comma-separated user list
+  users: ""                        # leave blank; the setup flow creates the first admin
   port: "8080"
   session_ttl: 8h                  # e.g. 8h, 30m, 24h
   show_qr: false

@@ -22,7 +22,11 @@ var UserPasswords = map[string]string{}
 func InitSecrets() {
 	LoadVaultSecrets()
 	LoadUserPasswords()
-	InitUserStore("users.json")
+	userPath := os.Getenv("APIG0_USERS_PATH")
+	if userPath == "" {
+		userPath = "users.json"
+	}
+	InitUserStore(userPath)
 	bootstrapUsers()
 
 	if len(UserSecrets) == 0 {
@@ -31,27 +35,44 @@ func InitSecrets() {
 	}
 }
 
+func configuredUsers() []string {
+	raw := strings.TrimSpace(os.Getenv("APIG0_USERS"))
+	if raw == "" {
+		return nil
+	}
+
+	users := make([]string, 0)
+	for _, user := range strings.Split(raw, ",") {
+		user = strings.TrimSpace(user)
+		if user == "" {
+			continue
+		}
+		users = append(users, user)
+	}
+	return users
+}
+
 // bootstrapUsers ensures that every user with a loaded password also exists
 // in the UserStore. The first user listed in APIG0_USERS gets the "admin" role;
 // all others default to "user". This solves the chicken-and-egg problem where
 // env-var passwords are hashed but never registered in the store.
 func bootstrapUsers() {
+	setup := CurrentSetupConfig()
+	if !SetupConfigured() && setup.RequiresSetup {
+		return
+	}
+
 	store := GetUserStore()
 	if store == nil {
 		return
 	}
 
-	users := "devin"
-	if u := os.Getenv("APIG0_USERS"); u != "" {
-		users = u
+	userList := configuredUsers()
+	if len(userList) == 0 {
+		return
 	}
-	userList := strings.Split(users, ",")
 
 	for i, user := range userList {
-		user = strings.TrimSpace(user)
-		if user == "" {
-			continue
-		}
 		if store.Exists(user) {
 			continue
 		}
@@ -63,7 +84,7 @@ func bootstrapUsers() {
 		if i == 0 {
 			role = "admin"
 		}
-		store.CreateWithHash(user, hash, role)
+		store.CreateWithHash(user, hash, role, nil, false)
 		log.Printf("[config] bootstrapped user %q (role: %s)", user, role)
 	}
 }
@@ -71,15 +92,8 @@ func bootstrapUsers() {
 // LoadUserPasswords reads APIG0_PASSWORD_<USER> for each configured user,
 // bcrypt-hashes the plaintext at startup, and stores the hash in UserPasswords.
 func LoadUserPasswords() {
-	users := "devin"
-	if u := os.Getenv("APIG0_USERS"); u != "" {
-		users = u
-	}
-	for _, user := range strings.Split(users, ",") {
-		user = strings.TrimSpace(user)
-		if user == "" {
-			continue
-		}
+	UserPasswords = map[string]string{}
+	for _, user := range configuredUsers() {
 		envName := "APIG0_PASSWORD_" + strings.ToUpper(strings.ReplaceAll(user, "-", "_"))
 		plain := os.Getenv(envName)
 		if plain == "" {
@@ -109,4 +123,3 @@ func ValidatePassword(user, password string) bool {
 	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
-

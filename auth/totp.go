@@ -89,6 +89,9 @@ func PrintQRIfEnabled(user string) {
 	if os.Getenv("APIG0_SHOW_QR") != "true" {
 		return
 	}
+	if user == "" {
+		return
+	}
 	PrintQR(user)
 }
 
@@ -122,4 +125,3 @@ func PrintQR(user string) {
 	}
 	log.Println("================================")
 }
-

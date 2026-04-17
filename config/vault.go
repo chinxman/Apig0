@@ -1,10 +1,13 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // VaultInterface is the universal contract for any secret backend.
@@ -38,6 +41,7 @@ type VaultConfig struct {
 	Type       string // env, hashicorp, aws, gcp, azure, cyberark, 1password, http, exec
 	SecretPath string // logical secret group (default: "totp")
 	SecretKey  string // key inside the secret data (default: "secret")
+	FilePath   string // local file for VAULT_TYPE=file
 }
 
 // LoadVaultConfig reads common vault settings from the environment.
@@ -46,6 +50,7 @@ func LoadVaultConfig() *VaultConfig {
 		Type:       os.Getenv("VAULT_TYPE"),
 		SecretPath: os.Getenv("VAULT_SECRET_PATH"),
 		SecretKey:  os.Getenv("VAULT_SECRET_KEY"),
+		FilePath:   os.Getenv("VAULT_FILE_PATH"),
 	}
 	if cfg.Type == "" {
 		cfg.Type = "env"
@@ -56,6 +61,9 @@ func LoadVaultConfig() *VaultConfig {
 	if cfg.SecretKey == "" {
 		cfg.SecretKey = "secret"
 	}
+	if cfg.FilePath == "" {
+		cfg.FilePath = "totp-secrets.json"
+	}
 	return cfg
 }
 
@@ -64,6 +72,8 @@ func CreateVault(cfg *VaultConfig) (VaultInterface, error) {
 	switch strings.ToLower(cfg.Type) {
 	case "env":
 		return NewEnvVault(), nil
+	case "file":
+		return NewFileVault(cfg), nil
 	case "hashicorp", "vault":
 		return NewHashicorpVault(cfg)
 	case "aws":
@@ -81,7 +91,7 @@ func CreateVault(cfg *VaultConfig) (VaultInterface, error) {
 	case "exec":
 		return NewExecVault(cfg)
 	default:
-		return nil, fmt.Errorf("unsupported vault type: %q — supported: env, hashicorp, aws, gcp, azure, cyberark, 1password, http, exec", cfg.Type)
+		return nil, fmt.Errorf("unsupported vault type: %q — supported: env, file, hashicorp, aws, gcp, azure, cyberark, 1password, http, exec", cfg.Type)
 	}
 }
 
@@ -128,16 +138,143 @@ func (v *EnvVault) Health() error  { return nil }
 func (v *EnvVault) String() string { return "env" }
 
 // ---------------------------------------------------------------------------
+// FileVault — secrets stored in a local JSON file for persistent local setups
+// ---------------------------------------------------------------------------
+
+type FileVault struct {
+	mu       sync.Mutex
+	filePath string
+}
+
+type fileVaultData struct {
+	Secrets map[string]string `json:"secrets"`
+}
+
+func NewFileVault(cfg *VaultConfig) *FileVault {
+	return &FileVault{filePath: cfg.FilePath}
+}
+
+func (v *FileVault) LoadSecret(secretPath string, key string) (string, error) {
+	data, err := v.readAll()
+	if err != nil {
+		return "", err
+	}
+	secret, ok := data.Secrets[key]
+	if !ok || secret == "" {
+		return "", fmt.Errorf("not found: %s/%s", secretPath, key)
+	}
+	return secret, nil
+}
+
+func (v *FileVault) StoreSecret(secretPath, key, value string) error {
+	data, err := v.readAll()
+	if err != nil {
+		return err
+	}
+	data.Secrets[key] = value
+	return v.writeAll(data)
+}
+
+func (v *FileVault) DeleteSecret(secretPath, key string) error {
+	data, err := v.readAll()
+	if err != nil {
+		return err
+	}
+	delete(data.Secrets, key)
+	return v.writeAll(data)
+}
+
+func (v *FileVault) ListKeys(secretPath string) ([]string, error) {
+	data, err := v.readAll()
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(data.Secrets))
+	for key := range data.Secrets {
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
+
+func (v *FileVault) Health() error { return nil }
+func (v *FileVault) String() string {
+	return "file"
+}
+
+func (v *FileVault) Path() string {
+	return v.filePath
+}
+
+func (v *FileVault) readAll() (*fileVaultData, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	data := &fileVaultData{Secrets: map[string]string{}}
+	raw, err := os.ReadFile(v.filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return data, nil
+		}
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return data, nil
+	}
+	if err := json.Unmarshal(raw, data); err != nil {
+		return nil, err
+	}
+	if data.Secrets == nil {
+		data.Secrets = map[string]string{}
+	}
+	return data, nil
+}
+
+func (v *FileVault) writeAll(data *fileVaultData) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	dir := filepath.Dir(v.filePath)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
+	}
+
+	raw, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(v.filePath, raw, 0600)
+}
+
+// ---------------------------------------------------------------------------
 // Shared state and helpers
 // ---------------------------------------------------------------------------
 
 // activeVault is the initialized vault client for the process lifetime.
 var activeVault VaultInterface
 
+// ActiveVaultName returns the active secret backend name.
+func ActiveVaultName() string {
+	if activeVault == nil {
+		return ""
+	}
+	return activeVault.String()
+}
+
+// ActiveVaultFilePath returns the local secret file path when VAULT_TYPE=file.
+func ActiveVaultFilePath() string {
+	if v, ok := activeVault.(*FileVault); ok {
+		return v.Path()
+	}
+	return ""
+}
+
 // LoadVaultSecrets initializes the vault client and pre-loads secrets for
-// all users listed in APIG0_USERS (comma-separated, default: "devin").
+// all users listed in APIG0_USERS.
 func LoadVaultSecrets() {
 	cfg := LoadVaultConfig()
+	UserSecrets = map[string]string{}
 
 	vault, err := CreateVault(cfg)
 	if err != nil {
@@ -152,15 +289,7 @@ func LoadVaultSecrets() {
 	}
 	activeVault = vault
 
-	users := "devin"
-	if u := os.Getenv("APIG0_USERS"); u != "" {
-		users = u
-	}
-	for _, user := range strings.Split(users, ",") {
-		user = strings.TrimSpace(user)
-		if user == "" {
-			continue
-		}
+	for _, user := range configuredUsers() {
 		secret, err := vault.LoadSecret(cfg.SecretPath, user)
 		if err != nil {
 			log.Printf("[vault] no secret for %q: %v", user, err)
@@ -209,4 +338,3 @@ func LoadUserSecret(user string) string {
 	UserSecrets[user] = secret
 	return secret
 }
-

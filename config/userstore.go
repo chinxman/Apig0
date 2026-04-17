@@ -15,10 +15,12 @@ import (
 const userVaultPath = "apig0-users"
 
 type User struct {
-	Username  string    `json:"username"`
-	PassHash  string    `json:"pass_hash"`
-	Role      string    `json:"role"` // "admin" | "user"
-	CreatedAt time.Time `json:"created_at"`
+	Username                string    `json:"username"`
+	PassHash                string    `json:"pass_hash"`
+	Role                    string    `json:"role"` // "admin" | "user"
+	ServiceAccessConfigured bool      `json:"service_access_configured,omitempty"`
+	AllowedServices         []string  `json:"allowed_services,omitempty"`
+	CreatedAt               time.Time `json:"created_at"`
 }
 
 // UserStore holds a fast in-memory cache of users and writes through to
@@ -33,7 +35,9 @@ type UserStore struct {
 var globalUserStore *UserStore
 
 // InitUserStore is called after InitSecrets so activeVault is ready.
-// It tries Vault first; if the vault is read-only it falls back to a local file.
+// It tries Vault first for proper namespaced backends (hashicorp, aws, etc.).
+// env and file vaults share a flat namespace with TOTP secrets, so user data
+// would collide — those backends always fall back to the dedicated file store.
 func InitUserStore(filePath string) {
 	s := &UserStore{
 		cache:    make(map[string]*User),
@@ -41,14 +45,18 @@ func InitUserStore(filePath string) {
 	}
 
 	if activeVault != nil {
-		if err := s.loadFromVault(); err != nil {
-			if !errors.Is(err, ErrReadOnly) {
-				log.Printf("[userstore] vault unavailable (%v), falling back to file", err)
+		vaultName := activeVault.String()
+		useForUsers := vaultName != "env" && vaultName != "file"
+		if useForUsers {
+			if err := s.loadFromVault(); err != nil {
+				if !errors.Is(err, ErrReadOnly) {
+					log.Printf("[userstore] vault unavailable (%v), falling back to file", err)
+				} else {
+					log.Printf("[userstore] vault is read-only, using file store")
+				}
 			} else {
-				log.Printf("[userstore] vault is read-only, using file store")
+				s.useVault = true
 			}
-		} else {
-			s.useVault = true
 		}
 	}
 
@@ -67,11 +75,25 @@ func (s *UserStore) backend() string {
 	return "file"
 }
 
+func (s *UserStore) Backend() string {
+	if s == nil {
+		return ""
+	}
+	return s.backend()
+}
+
+func (s *UserStore) FilePath() string {
+	if s == nil {
+		return ""
+	}
+	return s.filePath
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 func GetUserStore() *UserStore { return globalUserStore }
 
-func (s *UserStore) Create(username, password, role string) error {
+func (s *UserStore) Create(username, password, role string, allowedServices []string, restrictServices bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -83,10 +105,12 @@ func (s *UserStore) Create(username, password, role string) error {
 		return err
 	}
 	u := &User{
-		Username:  username,
-		PassHash:  string(hash),
-		Role:      role,
-		CreatedAt: time.Now(),
+		Username:                username,
+		PassHash:                string(hash),
+		Role:                    role,
+		ServiceAccessConfigured: restrictServices,
+		AllowedServices:         NormalizeAllowedServices(allowedServices),
+		CreatedAt:               time.Now(),
 	}
 	if err := s.persist(u); err != nil {
 		return err
@@ -97,7 +121,7 @@ func (s *UserStore) Create(username, password, role string) error {
 
 // CreateWithHash adds a user with a pre-hashed password (used during bootstrap
 // when passwords are already hashed from env vars).
-func (s *UserStore) CreateWithHash(username, passHash, role string) error {
+func (s *UserStore) CreateWithHash(username, passHash, role string, allowedServices []string, restrictServices bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -105,10 +129,12 @@ func (s *UserStore) CreateWithHash(username, passHash, role string) error {
 		return fmt.Errorf("user %q already exists", username)
 	}
 	u := &User{
-		Username:  username,
-		PassHash:  passHash,
-		Role:      role,
-		CreatedAt: time.Now(),
+		Username:                username,
+		PassHash:                passHash,
+		Role:                    role,
+		ServiceAccessConfigured: restrictServices,
+		AllowedServices:         NormalizeAllowedServices(allowedServices),
+		CreatedAt:               time.Now(),
 	}
 	if err := s.persist(u); err != nil {
 		return err
@@ -159,6 +185,80 @@ func (s *UserStore) GetRole(username string) string {
 		return u.Role
 	}
 	return ""
+}
+
+func (s *UserStore) GetAllowedServices(username string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if u, ok := s.cache[username]; ok {
+		if !u.ServiceAccessConfigured {
+			return nil
+		}
+		return append([]string(nil), u.AllowedServices...)
+	}
+	return nil
+}
+
+func (s *UserStore) SetAllowedServices(username string, allowedServices []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	u, ok := s.cache[username]
+	if !ok {
+		return fmt.Errorf("user %q not found", username)
+	}
+
+	u.ServiceAccessConfigured = true
+	u.AllowedServices = NormalizeAllowedServices(allowedServices)
+	return s.persist(u)
+}
+
+func (s *UserStore) CanAccessService(username, service string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	u, ok := s.cache[username]
+	if !ok {
+		return false
+	}
+	if u.Role == "admin" {
+		return true
+	}
+	if !u.ServiceAccessConfigured {
+		return true
+	}
+	if len(u.AllowedServices) == 0 {
+		return false
+	}
+	for _, allowed := range u.AllowedServices {
+		if allowed == service {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *UserStore) HasConfiguredServiceAccess(username string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if u, ok := s.cache[username]; ok {
+		return u.ServiceAccessConfigured
+	}
+	return false
+}
+
+func (s *UserStore) ClearServiceAccessRestrictions(username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	u, ok := s.cache[username]
+	if !ok {
+		return fmt.Errorf("user %q not found", username)
+	}
+
+	u.ServiceAccessConfigured = false
+	u.AllowedServices = nil
+	return s.persist(u)
 }
 
 func (s *UserStore) Exists(username string) bool {

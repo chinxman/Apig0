@@ -27,6 +27,9 @@ var (
 )
 
 func LoadRateLimits() RateLimitSettings {
+	if path := os.Getenv("APIG0_RATELIMITS_PATH"); path != "" {
+		rlPath = path
+	}
 	raw, err := os.ReadFile(rlPath)
 	if err != nil {
 		return rlData
@@ -52,6 +55,9 @@ func GetRateLimits() RateLimitSettings {
 func SaveRateLimits(s RateLimitSettings) error {
 	rlMu.Lock()
 	defer rlMu.Unlock()
+	if path := os.Getenv("APIG0_RATELIMITS_PATH"); path != "" {
+		rlPath = path
+	}
 	if s.Users == nil {
 		s.Users = make(map[string]RateLimitRule)
 	}

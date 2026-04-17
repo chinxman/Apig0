@@ -18,6 +18,7 @@ type vaultYAML struct {
 	Engine     string `yaml:"engine"`
 	SecretPath string `yaml:"secret_path"`
 	SecretKey  string `yaml:"secret_key"`
+	FilePath   string `yaml:"file_path"`
 }
 
 type gatewayYAML struct {
@@ -52,6 +53,7 @@ func LoadAppConfig() {
 	setDefault("VAULT_ENGINE", cfg.Vault.Engine)
 	setDefault("VAULT_SECRET_PATH", cfg.Vault.SecretPath)
 	setDefault("VAULT_SECRET_KEY", cfg.Vault.SecretKey)
+	setDefault("VAULT_FILE_PATH", cfg.Vault.FilePath)
 	setDefault("APIG0_USERS", cfg.Gateway.Users)
 	setDefault("APIG0_PORT", cfg.Gateway.Port)
 	setDefault("APIG0_SESSION_TTL", cfg.Gateway.SessionTTL)
