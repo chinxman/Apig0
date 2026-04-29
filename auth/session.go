@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -127,21 +128,72 @@ func ResetSessionState() {
 	sessions = map[string]sessionEntry{}
 }
 
-// SessionMiddleware rejects requests without a valid apig0_session cookie.
-// Sets "session_user" in the Gin context on success.
+func authenticateRequest(c *gin.Context) (string, string, bool) {
+	if raw := extractBearerToken(c.GetHeader("Authorization")); raw != "" {
+		if token, ok := config.ValidateAPIToken(raw); ok {
+			attachAPITokenContext(c, token)
+			return token.User, "token", true
+		}
+	}
+	if raw := strings.TrimSpace(c.GetHeader("X-API-Key")); raw != "" {
+		if token, ok := config.ValidateAPIToken(raw); ok {
+			attachAPITokenContext(c, token)
+			return token.User, "token", true
+		}
+	}
+
+	tok, err := c.Cookie("apig0_session")
+	if err != nil || tok == "" {
+		return "", "", false
+	}
+	user, ok := ValidateSession(tok)
+	if !ok {
+		return "", "", false
+	}
+	c.Set("session_user", user)
+	c.Set("auth_source", "session")
+	return user, "session", true
+}
+
+func attachAPITokenContext(c *gin.Context, token config.APIToken) {
+	c.Set("session_user", token.User)
+	c.Set("auth_source", "token")
+	c.Set("api_token", token)
+	c.Set("api_token_id", token.ID)
+	c.Set("api_token_allowed_services", token.AllowedServices)
+	c.Set("api_token_openai_service", token.OpenAIService)
+	c.Set("api_token_allowed_models", token.AllowedModels)
+	c.Set("api_token_allowed_providers", token.AllowedProviders)
+	if token.RateLimitRPM > 0 {
+		c.Set("api_token_rate_limit_rule", config.RateLimitRule{
+			RequestsPerMinute: token.RateLimitRPM,
+			Burst:             token.RateLimitBurst,
+		})
+	}
+}
+
+func extractBearerToken(header string) string {
+	header = strings.TrimSpace(header)
+	if header == "" || !strings.HasPrefix(strings.ToLower(header), "bearer ") {
+		return ""
+	}
+	return strings.TrimSpace(header[7:])
+}
+
+// SessionMiddleware rejects requests without a valid browser session or API token.
+// Sets "session_user" and "auth_source" in the Gin context on success.
 func SessionMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tok, err := c.Cookie("apig0_session")
-		if err != nil || tok == "" {
+		user, source, ok := authenticateRequest(c)
+		if !ok || user == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			return
 		}
-		user, ok := ValidateSession(tok)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired"})
-			return
+		if source == "session" {
+			if ip := clientIPv4(c.ClientIP()); ip != "" {
+				c.Set("session_client_ip", ip)
+			}
 		}
-		c.Set("session_user", user)
 		c.Next()
 	}
 }
@@ -150,17 +202,11 @@ func SessionMiddleware() gin.HandlerFunc {
 // Returns 403 if the user is authenticated but not an admin.
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tok, err := c.Cookie("apig0_session")
-		if err != nil || tok == "" {
+		user, _, ok := authenticateRequest(c)
+		if !ok || user == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			return
 		}
-		user, ok := ValidateSession(tok)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired"})
-			return
-		}
-		c.Set("session_user", user)
 
 		if config.GetUserStore() != nil && config.GetUserStore().GetRole(user) != "admin" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
@@ -212,4 +258,15 @@ func randHex(n int) string {
 		panic(err)
 	}
 	return hex.EncodeToString(b)
+}
+
+func clientIPv4(raw string) string {
+	ip := net.ParseIP(strings.TrimSpace(raw))
+	if ip == nil {
+		return ""
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.String()
 }

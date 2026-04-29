@@ -10,22 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type setupServiceRequest struct {
-	Name          string `json:"name"`
-	BaseURL       string `json:"base_url"`
-	AuthType      string `json:"auth_type"`
-	HeaderName    string `json:"header_name"`
-	BasicUsername string `json:"basic_username"`
-	Secret        string `json:"secret"`
-	Enabled       bool   `json:"enabled"`
-}
-
 // GET /api/setup/status
 func SetupStatusHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, config.GetRuntimeStatus())
 }
 
-// POST /api/setup/reset
+// POST /api/admin/setup/reset
 func ResetSetupHandler(c *gin.Context) {
 	if err := config.ResetSetupState(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -59,8 +49,6 @@ func CompleteSetupHandler(c *gin.Context) {
 		UserVault      config.UserVaultSettings   `json:"user_vault"`
 		ServiceSecrets config.ServiceSecretConfig `json:"service_secrets"`
 		ServiceMaster  string                     `json:"service_master_password"`
-		Services       []setupServiceRequest      `json:"services"`
-		EnableDemo     bool                       `json:"enable_demo"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid setup payload"})
@@ -78,22 +66,13 @@ func CompleteSetupHandler(c *gin.Context) {
 		ServiceSecrets: req.ServiceSecrets,
 	}
 
-	services, secrets := normalizeSetupServices(req.Services, req.EnableDemo)
-	if len(services) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one service or demo mode is required"})
-		return
-	}
+	var secrets map[string]string
 
 	if mode == config.SetupModePersistent {
 		setupCfg.UsersPath = "users.json"
 		setupCfg.ServicesPath = "services.json"
 		setupCfg.RateLimitsPath = "ratelimits.json"
-		if setupCfg.ServiceSecrets.Mode == config.ServiceSecretFile {
-			setupCfg.ServiceSecrets.FilePath = "service-secrets.json"
-		}
-		if setupCfg.ServiceSecrets.Mode == config.ServiceSecretEncryptedFile {
-			setupCfg.ServiceSecrets.FilePath = "service-secrets.enc.json"
-		}
+		setupCfg.ServiceSecrets = config.NormalizePersistentServiceSecretConfig(setupCfg.ServiceSecrets)
 		if setupCfg.UserVault.Type == "file" && setupCfg.UserVault.FilePath == "" {
 			setupCfg.UserVault.FilePath = "totp-secrets.json"
 		}
@@ -101,19 +80,12 @@ func CompleteSetupHandler(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if err := config.SaveServices(services); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
 	} else {
-		if setupCfg.ServiceSecrets.Mode == "" {
-			setupCfg.ServiceSecrets.Mode = config.ServiceSecretMemory
-		}
+		setupCfg.ServiceSecrets = config.NormalizeTemporaryServiceSecretConfig(setupCfg.ServiceSecrets)
 		if setupCfg.UserVault.Type == "" {
 			setupCfg.UserVault.Type = "env"
 		}
 		config.ActivateTemporarySetup(setupCfg)
-		config.SetServicesInMemory(services)
 	}
 
 	if req.ServiceMaster != "" {
@@ -124,7 +96,7 @@ func CompleteSetupHandler(c *gin.Context) {
 		return
 	}
 
-	_, otpauth, err := provisionUser(req.AdminUsername, req.AdminPassword, "admin", nil, false)
+	_, otpauth, err := ProvisionUser(req.AdminUsername, req.AdminPassword, "admin", nil, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "status": config.GetRuntimeStatus()})
 		return
@@ -163,7 +135,7 @@ func BootstrapAdminHandler(c *gin.Context) {
 		return
 	}
 
-	_, otpauth, err := provisionUser(req.Username, req.Password, "admin", nil, false)
+	_, otpauth, err := ProvisionUser(req.Username, req.Password, "admin", nil, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -200,6 +172,7 @@ func UpgradeStorageHandler(c *gin.Context) {
 		return
 	}
 
+	req.ServiceSecrets = config.NormalizePersistentServiceSecretConfig(req.ServiceSecrets)
 	if req.ServiceSecrets.Mode == config.ServiceSecretEncryptedFile && req.MasterPassword == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "master password required for encrypted file mode"})
 		return
@@ -237,35 +210,4 @@ func UpgradeStorageHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "status": config.GetRuntimeStatus()})
-}
-
-func normalizeSetupServices(in []setupServiceRequest, enableDemo bool) ([]config.ServiceConfig, map[string]string) {
-	services := make([]config.ServiceConfig, 0, len(in))
-	secrets := make(map[string]string)
-	for _, svc := range in {
-		name := strings.TrimSpace(strings.ToLower(svc.Name))
-		baseURL := strings.TrimSpace(svc.BaseURL)
-		if name == "" || baseURL == "" {
-			continue
-		}
-		cfg := config.ServiceConfig{
-			Name:          name,
-			BaseURL:       baseURL,
-			AuthType:      config.ServiceAuthType(strings.TrimSpace(svc.AuthType)),
-			HeaderName:    strings.TrimSpace(svc.HeaderName),
-			BasicUsername: strings.TrimSpace(svc.BasicUsername),
-			Enabled:       true,
-			HasSecret:     strings.TrimSpace(svc.Secret) != "",
-		}
-		services = append(services, cfg)
-		if strings.TrimSpace(svc.Secret) != "" {
-			secrets[name] = strings.TrimSpace(svc.Secret)
-		}
-	}
-	if len(services) == 0 && enableDemo {
-		for _, demo := range config.DefaultDemoServices() {
-			services = append(services, demo)
-		}
-	}
-	return services, secrets
 }

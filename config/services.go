@@ -24,6 +24,10 @@ type ServiceConfig struct {
 	AuthType      ServiceAuthType `json:"auth_type"`
 	HeaderName    string          `json:"header_name,omitempty"`
 	BasicUsername string          `json:"basic_username,omitempty"`
+	Provider      string          `json:"provider,omitempty"`
+	OpenAICompat  bool            `json:"openai_compatible,omitempty"`
+	TimeoutMS     int             `json:"timeout_ms,omitempty"`
+	RetryCount    int             `json:"retry_count,omitempty"`
 	Enabled       bool            `json:"enabled"`
 	HasSecret     bool            `json:"has_secret"`
 }
@@ -141,6 +145,16 @@ func GetServiceCatalog() []ServiceConfig {
 	return out
 }
 
+func GetServiceConfig(name string) (ServiceConfig, bool) {
+	name = strings.TrimSpace(strings.ToLower(name))
+
+	serviceMu.RLock()
+	defer serviceMu.RUnlock()
+
+	svc, ok := serviceData[name]
+	return svc, ok
+}
+
 func LookupService(name string) (ServiceConfig, bool) {
 	serviceMu.RLock()
 	defer serviceMu.RUnlock()
@@ -159,6 +173,20 @@ func ListServiceNames() []string {
 	names := make([]string, 0, len(serviceData))
 	for name, svc := range serviceData {
 		if svc.Enabled {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func ListOpenAICompatibleServiceNames() []string {
+	serviceMu.RLock()
+	defer serviceMu.RUnlock()
+
+	names := make([]string, 0, len(serviceData))
+	for name, svc := range serviceData {
+		if svc.Enabled && svc.OpenAICompat {
 			names = append(names, name)
 		}
 	}
@@ -203,16 +231,57 @@ func cloneServiceMap(src map[string]ServiceConfig) map[string]ServiceConfig {
 	return out
 }
 
+func UpsertService(svc ServiceConfig) error {
+	clean, ok := normalizeServiceConfig(svc)
+	if !ok {
+		return os.ErrInvalid
+	}
+
+	services := GetServiceCatalog()
+	replaced := false
+	for i := range services {
+		if services[i].Name == clean.Name {
+			services[i] = clean
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		services = append(services, clean)
+	}
+	return SaveServices(services)
+}
+
+func DeleteService(name string) error {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if name == "" {
+		return os.ErrInvalid
+	}
+
+	services := GetServiceCatalog()
+	filtered := make([]ServiceConfig, 0, len(services))
+	removed := false
+	for _, svc := range services {
+		if svc.Name == name {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, svc)
+	}
+	if !removed {
+		return os.ErrNotExist
+	}
+	return SaveServices(filtered)
+}
+
 func normalizeServiceConfig(svc ServiceConfig) (ServiceConfig, bool) {
 	svc.Name = strings.TrimSpace(strings.ToLower(svc.Name))
 	svc.BaseURL = strings.TrimSpace(svc.BaseURL)
 	svc.HeaderName = strings.TrimSpace(svc.HeaderName)
 	svc.BasicUsername = strings.TrimSpace(svc.BasicUsername)
+	svc.Provider = NormalizeProviderName(svc.Provider)
 	if svc.Name == "" || svc.BaseURL == "" {
 		return ServiceConfig{}, false
-	}
-	if !svc.Enabled {
-		svc.Enabled = true
 	}
 	switch svc.AuthType {
 	case ServiceAuthNone, ServiceAuthBearer, ServiceAuthXAPIKey, ServiceAuthCustomHeader, ServiceAuthBasic:
@@ -225,5 +294,27 @@ func normalizeServiceConfig(svc ServiceConfig) (ServiceConfig, bool) {
 	if svc.AuthType == ServiceAuthCustomHeader && svc.HeaderName == "" {
 		svc.HeaderName = "Authorization"
 	}
+	if svc.TimeoutMS <= 0 {
+		svc.TimeoutMS = 10000
+	}
+	if svc.TimeoutMS > 120000 {
+		svc.TimeoutMS = 120000
+	}
+	if svc.RetryCount < 0 {
+		svc.RetryCount = 0
+	}
+	if svc.RetryCount > 3 {
+		svc.RetryCount = 3
+	}
 	return svc, true
+}
+
+func NormalizeProviderName(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	switch raw {
+	case "openai", "anthropic", "hermes", "ollama", "vllm", "custom":
+		return raw
+	default:
+		return raw
+	}
 }

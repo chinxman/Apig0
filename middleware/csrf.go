@@ -42,6 +42,10 @@ func CSRF() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		if source, _ := c.Get("auth_source"); source == "token" {
+			c.Next()
+			return
+		}
 
 		// Validate: header must match cookie
 		headerTok := c.GetHeader(csrfTokenHeader)

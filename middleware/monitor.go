@@ -3,6 +3,8 @@ package middleware
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -170,6 +172,8 @@ func (m *Monitor) record(evt *RequestEvent) {
 	sc.totalLatency += evt.LatencyMs
 	sc.lastStatus = evt.Status
 	sc.lastSeen = evt.Timestamp
+
+	appendMonitorEvent(evt)
 }
 
 func (m *Monitor) broadcast(evt *RequestEvent) {
@@ -248,6 +252,10 @@ func (m *Monitor) StatsHandler() gin.HandlerFunc {
 	}
 }
 
+func (m *Monitor) Snapshot() *Snapshot {
+	return m.snapshot()
+}
+
 func (m *Monitor) snapshot() *Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -295,4 +303,28 @@ func (m *Monitor) recentEvents() []*RequestEvent {
 		}
 	}
 	return result
+}
+
+func MonitorEventLogPath() string {
+	if path := strings.TrimSpace(os.Getenv("APIG0_MONITOR_PATH")); path != "" {
+		return path
+	}
+	return filepath.Join(os.TempDir(), "apig0-monitor.jsonl")
+}
+
+func appendMonitorEvent(evt *RequestEvent) {
+	raw, err := json.Marshal(evt)
+	if err != nil {
+		return
+	}
+	path := MonitorEventLogPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil && filepath.Dir(path) != "." {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(append(raw, '\n'))
 }

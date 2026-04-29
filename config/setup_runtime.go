@@ -18,12 +18,13 @@ const (
 )
 
 type UserVaultSettings struct {
-	Type       string `json:"type"`
-	Address    string `json:"address,omitempty"`
-	Engine     string `json:"engine,omitempty"`
-	SecretPath string `json:"secret_path,omitempty"`
-	SecretKey  string `json:"secret_key,omitempty"`
-	FilePath   string `json:"file_path,omitempty"`
+	Type        string            `json:"type"`
+	Address     string            `json:"address,omitempty"`
+	Engine      string            `json:"engine,omitempty"`
+	SecretPath  string            `json:"secret_path,omitempty"`
+	SecretKey   string            `json:"secret_key,omitempty"`
+	FilePath    string            `json:"file_path,omitempty"`
+	ProviderEnv map[string]string `json:"provider_env,omitempty"`
 }
 
 type SetupConfig struct {
@@ -49,14 +50,15 @@ var (
 func defaultSetupConfig() SetupConfig {
 	return SetupConfig{
 		Mode:           SetupModeTemporary,
-		Port:           "8080",
+		Port:           "8989",
 		UsersPath:      filepath.Join(os.TempDir(), "apig0-users-"+randomSuffix()+".json"),
 		ServicesPath:   filepath.Join(os.TempDir(), "apig0-services-"+randomSuffix()+".json"),
 		RateLimitsPath: filepath.Join(os.TempDir(), "apig0-ratelimits-"+randomSuffix()+".json"),
 		UserVault: UserVaultSettings{
-			Type:       "env",
-			SecretPath: "totp",
-			SecretKey:  "secret",
+			Type:        "env",
+			SecretPath:  "totp",
+			SecretKey:   "secret",
+			ProviderEnv: map[string]string{},
 		},
 		ServiceSecrets: ServiceSecretConfig{Mode: ServiceSecretMemory},
 		RequiresSetup:  true,
@@ -150,6 +152,7 @@ func ResetSetupState() error {
 		}
 	}
 
+	ResetAuditState()
 	activeSetup = defaultSetupConfig()
 	setupConfigured = false
 	applySetupEnvLocked(activeSetup)
@@ -161,7 +164,7 @@ func normalizeSetupConfig(cfg SetupConfig) SetupConfig {
 		cfg.Mode = SetupModeTemporary
 	}
 	if strings.TrimSpace(cfg.Port) == "" {
-		cfg.Port = "8080"
+		cfg.Port = "8989"
 	}
 	if cfg.Mode == SetupModePersistent {
 		if cfg.UsersPath == "" {
@@ -193,23 +196,14 @@ func normalizeSetupConfig(cfg SetupConfig) SetupConfig {
 	if cfg.UserVault.SecretKey == "" {
 		cfg.UserVault.SecretKey = "secret"
 	}
+	cfg.UserVault.ProviderEnv = normalizeProviderEnv(cfg.UserVault.ProviderEnv)
 	if cfg.UserVault.Type == "file" && cfg.UserVault.FilePath == "" {
 		cfg.UserVault.FilePath = "totp-secrets.json"
 	}
-	if cfg.ServiceSecrets.Mode == "" {
-		if cfg.Mode == SetupModePersistent {
-			cfg.ServiceSecrets.Mode = ServiceSecretFile
-			cfg.ServiceSecrets.FilePath = "service-secrets.json"
-		} else {
-			cfg.ServiceSecrets.Mode = ServiceSecretMemory
-		}
-	}
-	if cfg.ServiceSecrets.Mode != ServiceSecretMemory && cfg.ServiceSecrets.FilePath == "" {
-		if cfg.ServiceSecrets.Mode == ServiceSecretEncryptedFile {
-			cfg.ServiceSecrets.FilePath = "service-secrets.enc.json"
-		} else {
-			cfg.ServiceSecrets.FilePath = "service-secrets.json"
-		}
+	if cfg.Mode == SetupModePersistent {
+		cfg.ServiceSecrets = NormalizePersistentServiceSecretConfig(cfg.ServiceSecrets)
+	} else {
+		cfg.ServiceSecrets = NormalizeTemporaryServiceSecretConfig(cfg.ServiceSecrets)
 	}
 	return cfg
 }
@@ -224,12 +218,71 @@ func applySetupEnvLocked(cfg SetupConfig) {
 	os.Setenv("VAULT_SECRET_KEY", cfg.UserVault.SecretKey)
 	if cfg.UserVault.Address != "" {
 		os.Setenv("VAULT_ADDRESS", cfg.UserVault.Address)
+	} else {
+		os.Unsetenv("VAULT_ADDRESS")
 	}
 	if cfg.UserVault.Engine != "" {
 		os.Setenv("VAULT_ENGINE", cfg.UserVault.Engine)
+	} else {
+		os.Unsetenv("VAULT_ENGINE")
 	}
 	if cfg.UserVault.FilePath != "" {
 		os.Setenv("VAULT_FILE_PATH", cfg.UserVault.FilePath)
+	} else {
+		os.Unsetenv("VAULT_FILE_PATH")
+	}
+	applyProviderEnvLocked(cfg.UserVault.ProviderEnv)
+}
+
+var providerEnvKeys = []string{
+	"AWS_REGION",
+	"AWS_DEFAULT_REGION",
+	"AWS_PROFILE",
+	"AWS_ACCESS_KEY_ID",
+	"AWS_SECRET_ACCESS_KEY",
+	"AWS_SESSION_TOKEN",
+	"GCP_PROJECT",
+	"CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+	"AZURE_VAULT_NAME",
+	"AZURE_TENANT_ID",
+	"AZURE_CLIENT_ID",
+	"AZURE_CLIENT_SECRET",
+	"OP_VAULT",
+	"OP_SERVICE_ACCOUNT_TOKEN",
+	"CYBERARK_ADDRESS",
+	"CYBERARK_APP_ID",
+	"CYBERARK_SAFE",
+	"CYBERARK_FOLDER",
+	"VAULT_HTTP_URL",
+	"VAULT_HTTP_METHOD",
+	"VAULT_HTTP_HEADER",
+	"VAULT_HTTP_JSON_PATH",
+	"VAULT_HTTP_BODY",
+	"VAULT_HTTP_BASE64",
+	"VAULT_EXEC_COMMAND",
+}
+
+func normalizeProviderEnv(env map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, key := range providerEnvKeys {
+		if strings.TrimSpace(env[key]) != "" {
+			out[key] = strings.TrimSpace(env[key])
+		}
+	}
+	if region := out["AWS_REGION"]; region != "" && out["AWS_DEFAULT_REGION"] == "" {
+		out["AWS_DEFAULT_REGION"] = region
+	}
+	return out
+}
+
+func applyProviderEnvLocked(env map[string]string) {
+	env = normalizeProviderEnv(env)
+	for _, key := range providerEnvKeys {
+		if value := env[key]; value != "" {
+			os.Setenv(key, value)
+		} else {
+			os.Unsetenv(key)
+		}
 	}
 }
 
@@ -239,6 +292,16 @@ func resetTargetsLocked() []string {
 		"users.json",
 		"services.json",
 		"ratelimits.json",
+		"api-tokens.json",
+		"api-token-deliveries.json",
+		"access-policies.json",
+		"service-secret-metadata.json",
+		"audit.log",
+		apiTokensFilePath(),
+		pendingTokenDeliveryFilePath(),
+		accessPoliciesFilePath(),
+		serviceSecretMetadataPath(),
+		auditFilePath(),
 		"service-secrets.json",
 		"service-secrets.enc.json",
 		"totp-secrets.json",
@@ -293,16 +356,7 @@ func UpgradeToPersistent(vaultCfg UserVaultSettings, ssCfg ServiceSecretConfig, 
 	if cfg.UserVault.SecretKey == "" {
 		cfg.UserVault.SecretKey = "secret"
 	}
-	cfg.ServiceSecrets = ssCfg
-	if cfg.ServiceSecrets.Mode == "" {
-		cfg.ServiceSecrets.Mode = ServiceSecretFile
-	}
-	if cfg.ServiceSecrets.Mode == ServiceSecretFile && cfg.ServiceSecrets.FilePath == "" {
-		cfg.ServiceSecrets.FilePath = "service-secrets.json"
-	}
-	if cfg.ServiceSecrets.Mode == ServiceSecretEncryptedFile && cfg.ServiceSecrets.FilePath == "" {
-		cfg.ServiceSecrets.FilePath = "service-secrets.enc.json"
-	}
+	cfg.ServiceSecrets = NormalizePersistentServiceSecretConfig(ssCfg)
 
 	cfg.RequiresSetup = false
 	cfg.Persisted = true

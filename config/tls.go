@@ -20,9 +20,9 @@ import (
 type TLSMode int
 
 const (
-	TLSOff  TLSMode = iota // plain HTTP
-	TLSAuto                // auto-generate self-signed cert
-	TLSCustom              // user-provided cert + key paths
+	TLSOff    TLSMode = iota // plain HTTP
+	TLSAuto                  // auto-generate self-signed cert
+	TLSCustom                // user-provided cert + key paths
 )
 
 // TLSConfig holds the resolved TLS settings for the gateway.
@@ -84,9 +84,10 @@ func ensureAutocert() (certPath, keyPath string, err error) {
 	certPath = defaultCertFile
 	keyPath = defaultKeyFile
 
-	// Reuse existing certs if they exist and aren't expired
-	if certOK(certPath) {
-		log.Printf("[tls] reusing existing auto-cert: %s", certPath)
+	// Temporary setup should feel disposable and isolated, including its TLS material.
+	if shouldRotateTemporaryAutocert() {
+		log.Println("[tls] temporary setup detected; generating a fresh auto-cert")
+	} else if certOK(certPath, keyPath) {
 		return certPath, keyPath, nil
 	}
 
@@ -147,9 +148,17 @@ func ensureAutocert() (certPath, keyPath string, err error) {
 	return certPath, keyPath, nil
 }
 
-// certOK returns true if the cert file exists and hasn't expired.
-func certOK(path string) bool {
-	raw, err := os.ReadFile(path)
+func shouldRotateTemporaryAutocert() bool {
+	setup := CurrentSetupConfig()
+	return setup.Mode == SetupModeTemporary && !setup.Persisted
+}
+
+// certOK returns true if the cert + key files exist and the certificate hasn't expired.
+func certOK(certPath, keyPath string) bool {
+	if _, err := os.Stat(keyPath); err != nil {
+		return false
+	}
+	raw, err := os.ReadFile(certPath)
 	if err != nil {
 		return false
 	}

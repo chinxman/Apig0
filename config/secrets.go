@@ -30,8 +30,14 @@ func InitSecrets() {
 	bootstrapUsers()
 
 	if len(UserSecrets) == 0 {
-		log.Println("[config] WARNING: no TOTP secrets loaded")
-		log.Println("[config] Set APIG0_TOTP_SECRET_<USER> env vars, or configure a vault backend")
+		setup := CurrentSetupConfig()
+		if !SetupConfigured() && setup.RequiresSetup {
+			return
+		}
+		if len(configuredUsers()) == 0 {
+			return
+		}
+		log.Println("[config] TOTP secrets not loaded; configure APIG0_TOTP_SECRET_<USER> or a vault backend to enable local MFA for configured users")
 	}
 }
 

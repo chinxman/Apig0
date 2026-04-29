@@ -4,427 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Apig0 Gateway</title>
-  <style>
-    :root {
-      --bg: #1a1b26; --bg-card: #16161e; --bg-deep: #0d0d12;
-      --border: #2f334d; --text: #c0caf5; --text-dim: #565f89;
-      --blue: #7aa2f7; --purple: #bb9af7; --green: #9ece6a;
-      --yellow: #e0af68; --orange: #ff9e64; --red: #f7768e; --cyan: #7dcfff;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-      background: var(--bg); color: var(--text); min-height: 100vh;
-    }
-
-    /* ── Header ── */
-    .header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 24px; background: var(--bg-deep);
-      border-bottom: 1px solid var(--border);
-    }
-    .header-left { display: flex; align-items: center; gap: 16px; }
-    .header-left h1 { font-size: 18px; color: var(--blue); font-weight: 700; cursor: pointer; }
-    .header-left .gateway-url { font-size: 12px; color: var(--text-dim); }
-    .header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; }
-    .user-badge { color: var(--purple); font-weight: 600; }
-    .role-badge {
-      background: rgba(122,162,247,0.1); border: 1px solid rgba(122,162,247,0.3);
-      color: var(--blue); padding: 2px 8px; border-radius: 4px; font-size: 10px;
-      text-transform: uppercase; font-weight: 600;
-    }
-    .role-badge.admin { background: rgba(187,154,247,0.15); border-color: rgba(187,154,247,0.3); color: var(--purple); }
-    .logout-btn {
-      background: none; border: 1px solid var(--border); color: var(--text-dim);
-      padding: 5px 14px; border-radius: 5px; font-family: inherit; font-size: 11px;
-      cursor: pointer; transition: border-color 0.2s, color 0.2s;
-    }
-    .logout-btn:hover { border-color: var(--red); color: var(--red); }
-
-    /* ── Navigation ── */
-    .nav {
-      display: flex; background: var(--bg-deep); border-bottom: 1px solid var(--border);
-      padding: 0 24px; gap: 0;
-    }
-    .nav-tab {
-      padding: 10px 18px; background: none; border: none;
-      color: var(--text-dim); font-family: inherit; font-size: 12px;
-      font-weight: 600; cursor: pointer; text-transform: uppercase;
-      letter-spacing: 0.5px; border-bottom: 2px solid transparent;
-      transition: color 0.2s, border-color 0.2s;
-    }
-    .nav-tab:hover { color: var(--text); }
-    .nav-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
-    .nav-tab.admin-only { display: none; }
-    .nav-tab.admin-only.visible { display: block; }
-
-    /* ── Page panels ── */
-    .page { display: none; padding: 24px; max-width: 1400px; margin: 0 auto; }
-    .page.active { display: block; }
-
-    /* ── Login overlay ── */
-    .login-overlay {
-      display: none; position: fixed; inset: 0; z-index: 1000;
-      background: rgba(13,13,18,0.95); backdrop-filter: blur(8px);
-      align-items: center; justify-content: center;
-    }
-    .login-overlay.visible { display: flex; }
-    #setup-overlay { align-items: flex-start; overflow-y: auto; padding: 24px 16px; }
-    .login-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 14px; padding: 36px 40px; width: 100%; max-width: 380px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-    }
-    .login-card h2 { font-size: 22px; font-weight: 700; color: var(--blue); margin-bottom: 4px; }
-    .login-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 28px; }
-    .login-step { display: none; }
-    .login-step.active { display: block; }
-    .login-field { margin-bottom: 16px; }
-    .login-field label {
-      display: block; font-size: 11px; color: var(--text-dim);
-      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
-    }
-    .login-field input {
-      width: 100%; background: var(--bg-deep); border: 1px solid var(--border);
-      color: var(--text); padding: 10px 14px; border-radius: 7px;
-      font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s;
-    }
-    .login-field input:focus { border-color: var(--blue); }
-    .login-btn {
-      width: 100%; margin-top: 8px; background: var(--blue); color: var(--bg);
-      border: none; padding: 11px; border-radius: 7px;
-      font-family: inherit; font-size: 14px; font-weight: 700;
-      cursor: pointer; transition: opacity 0.2s;
-    }
-    .login-btn:hover { opacity: 0.85; }
-    .login-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .login-err {
-      margin-top: 12px; padding: 9px 12px;
-      background: rgba(247,118,142,0.1); border: 1px solid rgba(247,118,142,0.25);
-      border-radius: 6px; color: var(--red); font-size: 12px; display: none;
-    }
-    .login-err.visible { display: block; }
-    .login-back {
-      background: none; border: none; color: var(--text-dim);
-      font-family: inherit; font-size: 12px; cursor: pointer;
-      margin-top: 14px; padding: 0; text-decoration: underline;
-    }
-    .login-back:hover { color: var(--text); }
-
-    .setup-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 14px; padding: 24px; margin-bottom: 16px;
-    }
-    .setup-card h3 { font-size: 16px; color: var(--blue); margin-bottom: 8px; }
-    .setup-copy { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-bottom: 14px; }
-    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
-    .mode-bar { display: flex; gap: 10px; margin: 0 0 20px; }
-    .mode-btn {
-      flex: 1; background: var(--bg-deep); border: 2px solid var(--border);
-      border-radius: 10px; padding: 14px 16px; cursor: pointer;
-      font-family: inherit; text-align: left; transition: all 0.2s;
-    }
-    .mode-btn strong { display: block; font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-    .mode-btn span { display: block; font-size: 11px; color: var(--text-dim); line-height: 1.4; }
-    .mode-btn.active { border-color: var(--blue); background: rgba(122,162,247,0.08); }
-    .mode-btn.active strong { color: var(--blue); }
-    .vault-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-    .vault-chip {
-      background: var(--bg-deep); border: 1px solid var(--border);
-      color: var(--text-dim); padding: 6px 14px; border-radius: 6px;
-      font-family: inherit; font-size: 12px; font-weight: 600;
-      cursor: pointer; transition: all 0.15s;
-    }
-    .vault-chip.active { border-color: var(--blue); color: var(--blue); background: rgba(122,162,247,0.1); }
-    .vault-chip:hover:not(.active) { border-color: var(--text-dim); color: var(--text); }
-    .setup-section { margin-top: 18px; }
-    .setup-section-label {
-      font-size: 10px; color: var(--text-dim); text-transform: uppercase;
-      letter-spacing: 1px; font-weight: 600; margin-bottom: 10px;
-    }
-    .setup-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
-    .status-item {
-      background: var(--bg-deep); border: 1px solid var(--border);
-      border-radius: 8px; padding: 12px;
-    }
-    .status-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-    .status-value { font-size: 13px; color: var(--text); word-break: break-word; }
-    .status-value.warn { color: var(--orange); }
-    .status-copy { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
-    .choice-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
-    .choice-chip {
-      flex: 1; min-width: 140px; background: var(--bg-deep); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 12px; cursor: pointer;
-    }
-    .choice-chip.active { border-color: var(--blue); box-shadow: 0 0 0 1px rgba(122,162,247,0.25) inset; }
-    .choice-chip strong { display:block; font-size:12px; color: var(--text); margin-bottom:4px; }
-    .choice-chip span { font-size:11px; color: var(--text-dim); line-height:1.4; display:block; }
-    .inline-note { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
-    .service-builder { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
-    .service-row {
-      background: var(--bg-deep); border:1px solid var(--border); border-radius:8px; padding:12px;
-    }
-    .service-row h4 { font-size:12px; color:var(--purple); margin-bottom:10px; }
-    .stack { display:flex; flex-direction:column; gap:12px; }
-    .toggle-line { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); margin-bottom:12px; }
-
-    /* ── Portal page ── */
-    .welcome { margin-bottom: 28px; }
-    .welcome h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
-    .welcome p { color: var(--text-dim); font-size: 13px; }
-    .section-title {
-      font-size: 11px; color: var(--text-dim); text-transform: uppercase;
-      letter-spacing: 1px; margin-bottom: 14px; font-weight: 600;
-    }
-    .portal-services { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 32px; }
-    .portal-svc {
-      flex: 1; min-width: 200px; max-width: 280px;
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 20px 18px; cursor: pointer;
-      text-decoration: none; color: inherit; transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .portal-svc:hover { border-color: var(--blue); box-shadow: 0 0 14px rgba(122,162,247,0.1); }
-    .portal-svc-name { font-size: 15px; font-weight: 700; color: var(--purple); margin-bottom: 6px; }
-    .portal-svc-url { font-size: 11px; color: var(--text-dim); word-break: break-all; }
-    .session-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 20px 22px; display: flex; gap: 32px; flex-wrap: wrap;
-    }
-    .stat-item {}
-    .stat-val { font-size: 20px; font-weight: 700; }
-    .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
-
-    /* ── Monitor page (admin) ── */
-    .monitor-header { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-    .monitor-stat {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 16px 20px; min-width: 130px;
-    }
-    .monitor-stat .stat-val { font-size: 22px; }
-    .conn-status { display: flex; align-items: center; gap: 6px; }
-    .conn-dot {
-      width: 8px; height: 8px; border-radius: 50%; background: var(--red);
-      transition: background 0.3s;
-    }
-    .conn-dot.live { background: var(--green); box-shadow: 0 0 6px rgba(158,206,106,0.6); }
-    .services-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
-    .svc-card {
-      flex: 1; min-width: 200px; background: var(--bg-card);
-      border: 1px solid var(--border); border-radius: 10px; padding: 16px;
-      transition: border-color 0.3s, box-shadow 0.3s;
-    }
-    .svc-card.flash { border-color: var(--blue); box-shadow: 0 0 12px rgba(122,162,247,0.15); }
-    .svc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .svc-name { font-size: 15px; font-weight: 700; color: var(--purple); }
-    .svc-dot {
-      width: 10px; height: 10px; border-radius: 50%; background: var(--text-dim);
-      transition: background 0.3s;
-    }
-    .svc-dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(158,206,106,0.5); }
-    .svc-dot.err { background: var(--red); box-shadow: 0 0 6px rgba(247,118,142,0.5); }
-    .svc-backend { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; word-break: break-all; }
-    .svc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .svc-stat-val { font-size: 16px; font-weight: 600; }
-    .svc-stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
-
-    /* ── Request log ── */
-    .log-section {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 10px; margin-bottom: 20px; overflow: hidden;
-    }
-    .log-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 16px; background: var(--bg-deep);
-      border-bottom: 1px solid var(--border);
-    }
-    .log-header h2 { font-size: 13px; color: var(--blue); font-weight: 600; }
-    .log-controls { display: flex; gap: 8px; }
-    .log-controls button {
-      background: var(--border); color: var(--text); border: none;
-      padding: 4px 10px; border-radius: 4px; font-size: 11px;
-      font-family: inherit; cursor: pointer; transition: background 0.2s;
-    }
-    .log-controls button:hover { background: var(--blue); color: var(--bg); }
-    .log-controls button.active { background: var(--blue); color: var(--bg); }
-    .log-body { height: 380px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-    .log-body::-webkit-scrollbar { width: 6px; }
-    .log-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    thead { position: sticky; top: 0; z-index: 1; }
-    th {
-      text-align: left; padding: 8px 12px; background: var(--bg-deep);
-      color: var(--text-dim); font-weight: 600; font-size: 10px;
-      text-transform: uppercase; letter-spacing: 0.5px;
-      border-bottom: 1px solid var(--border);
-    }
-    td { padding: 6px 12px; border-bottom: 1px solid #1a1b2e; white-space: nowrap; }
-    tr { transition: background 0.15s; }
-    tr:hover { background: rgba(122,162,247,0.05); }
-    tr.new-row { animation: fadeIn 0.3s ease; }
-    @keyframes fadeIn { from { background: rgba(122,162,247,0.12); } to { background: transparent; } }
-    .method { font-weight: 700; }
-    .method-get { color: var(--green); }
-    .method-post { color: var(--blue); }
-    .method-put { color: var(--yellow); }
-    .method-delete { color: var(--red); }
-    .method-options { color: var(--text-dim); }
-    .status { font-weight: 700; padding: 2px 6px; border-radius: 3px; font-size: 11px; }
-    .s2xx { color: var(--green); }
-    .s3xx { color: var(--cyan); }
-    .s4xx { color: var(--orange); }
-    .s5xx { color: var(--red); background: rgba(247,118,142,0.1); }
-    .latency-fast { color: var(--green); }
-    .latency-mid { color: var(--yellow); }
-    .latency-slow { color: var(--red); }
-    .empty-log { padding: 40px; text-align: center; color: var(--text-dim); font-size: 13px; }
-
-    /* ── Test console ── */
-    .console {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 16px;
-    }
-    .console h2 { font-size: 13px; color: var(--blue); font-weight: 600; margin-bottom: 12px; }
-    .console-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .test-btn {
-      background: var(--border); color: var(--text); border: none;
-      padding: 8px 14px; border-radius: 6px; font-family: inherit;
-      font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s, color 0.2s;
-    }
-    .test-btn:hover { background: var(--blue); color: var(--bg); }
-    .test-result {
-      margin-top: 10px; padding: 10px 14px; border-radius: 6px;
-      font-size: 12px; display: none; word-break: break-all; white-space: pre-wrap;
-    }
-    .test-result.show { display: block; }
-    .test-result.ok { background: rgba(158,206,106,0.1); color: var(--green); border: 1px solid rgba(158,206,106,0.2); }
-    .test-result.err { background: rgba(247,118,142,0.1); color: var(--red); border: 1px solid rgba(247,118,142,0.2); }
-
-    /* ── Users page (admin) ── */
-    .btn-primary {
-      background: var(--blue); color: var(--bg); border: none;
-      padding: 7px 16px; border-radius: 6px; font-family: inherit;
-      font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.2s;
-    }
-    .btn-primary:hover { opacity: 0.85; }
-    .btn-danger {
-      background: none; border: 1px solid var(--red); color: var(--red);
-      padding: 4px 10px; border-radius: 5px; font-family: inherit;
-      font-size: 11px; cursor: pointer; transition: background 0.2s;
-    }
-    .btn-danger:hover { background: rgba(247,118,142,0.1); }
-    .btn-ghost {
-      background: none; border: 1px solid var(--border); color: var(--text-dim);
-      padding: 4px 10px; border-radius: 5px; font-family: inherit;
-      font-size: 11px; cursor: pointer; transition: border-color 0.2s, color 0.2s;
-    }
-    .btn-ghost:hover { border-color: var(--blue); color: var(--blue); }
-    .notice {
-      padding: 10px 14px; border-radius: 6px; font-size: 12px;
-      margin-bottom: 12px; display: none;
-    }
-    .notice.visible { display: block; }
-    .notice.ok { background: rgba(158,206,106,0.08); border: 1px solid rgba(158,206,106,0.2); color: var(--green); }
-    .notice.err { background: rgba(247,118,142,0.08); border: 1px solid rgba(247,118,142,0.2); color: var(--red); }
-
-    .users-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .users-toolbar h2 { font-size: 16px; font-weight: 700; }
-    .create-form {
-      background: var(--bg-deep); border: 1px solid var(--border);
-      border-radius: 8px; padding: 16px; margin-bottom: 16px; display: none;
-    }
-    .create-form.visible { display: block; }
-    .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-    .form-field { flex: 1; min-width: 120px; }
-    .form-field label {
-      display: block; font-size: 10px; color: var(--text-dim);
-      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
-    }
-    .form-input {
-      width: 100%; background: var(--bg-card); border: 1px solid var(--border);
-      color: var(--text); padding: 7px 10px; border-radius: 6px;
-      font-family: inherit; font-size: 13px; outline: none; transition: border-color 0.2s;
-    }
-    .form-input:focus { border-color: var(--blue); }
-    .form-actions { display: flex; gap: 8px; margin-top: 4px; }
-
-    .user-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .user-table th {
-      text-align: left; padding: 8px 10px; color: var(--text-dim);
-      font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-      border-bottom: 1px solid var(--border);
-    }
-    .user-table td { padding: 9px 10px; border-bottom: 1px solid #1a1b2e; }
-    .role-pill {
-      padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .role-admin { background: rgba(187,154,247,0.15); color: var(--purple); }
-    .role-user { background: rgba(122,162,247,0.1); color: var(--blue); }
-    .actions { display: flex; gap: 6px; }
-    .access-cell { min-width: 250px; }
-    .service-checks { display: flex; flex-wrap: wrap; gap: 8px 10px; }
-    .service-check {
-      display: inline-flex; align-items: center; gap: 5px;
-      color: var(--text); font-size: 11px;
-    }
-    .service-check input { accent-color: var(--blue); }
-    .service-muted { color: var(--text-dim); font-size: 11px; }
-
-    /* ── Rate limits page (admin) ── */
-    .rl-section { margin-bottom: 24px; }
-    .rl-section-title {
-      font-size: 11px; color: var(--text-dim); text-transform: uppercase;
-      letter-spacing: 0.5px; margin-bottom: 12px; font-weight: 600;
-    }
-    .rl-row {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
-      padding: 10px 12px; background: var(--bg-deep); border-radius: 7px;
-      border: 1px solid var(--border);
-    }
-    .rl-label { flex: 1; font-size: 13px; color: var(--text); font-weight: 600; }
-    .rl-sublabel { font-size: 10px; color: var(--text-dim); font-weight: 400; display: block; }
-    .rl-input {
-      width: 80px; background: var(--bg-card); border: 1px solid var(--border);
-      color: var(--text); padding: 5px 8px; border-radius: 5px;
-      font-family: inherit; font-size: 13px; outline: none; text-align: center;
-    }
-    .rl-input:focus { border-color: var(--blue); }
-    .rl-unit { font-size: 10px; color: var(--text-dim); white-space: nowrap; }
-    .rl-user-row {
-      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-      padding: 10px 12px; background: var(--bg-deep); border-radius: 7px;
-      border: 1px solid var(--border);
-    }
-
-    /* ── QR modal ── */
-    .qr-modal-bg {
-      display: none; position: fixed; inset: 0; z-index: 800;
-      background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
-    }
-    .qr-modal-bg.visible { display: flex; }
-    .qr-modal {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 14px; padding: 32px 36px; max-width: 400px; width: 90%;
-      text-align: center;
-    }
-    .qr-modal h3 { font-size: 16px; color: var(--blue); margin-bottom: 6px; }
-    .qr-modal p { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; }
-    #qr-canvas { margin: 0 auto 16px; }
-    .qr-uri {
-      background: var(--bg-deep); border: 1px solid var(--border);
-      border-radius: 6px; padding: 8px 12px; font-size: 10px; color: var(--text-dim);
-      word-break: break-all; text-align: left; margin-bottom: 16px;
-      max-height: 60px; overflow-y: auto;
-    }
-
-    /* ── Responsive ── */
-    @media (max-width: 768px) {
-      .header { flex-direction: column; gap: 12px; }
-      .header-right { flex-wrap: wrap; justify-content: center; }
-      .nav { overflow-x: auto; }
-      .monitor-header { flex-direction: column; }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/webui.css">
 </head>
 <body>
 
@@ -442,18 +22,17 @@
           <label>Password</label>
           <input type="password" id="login-password" autocomplete="current-password" placeholder="............">
         </div>
-        <button class="login-btn" id="btn-password" onclick="submitPassword()">Continue</button>
+        <button class="login-btn" id="btn-password" data-action="submit-password">Continue</button>
         <div class="login-err" id="err-password"></div>
-        <button class="login-back" onclick="resetSetupFlow()">Hard Reset Setup</button>
       </div>
       <div class="login-step" id="step-totp">
         <div class="login-field">
           <label>Authenticator code</label>
           <input type="text" id="login-totp" autocomplete="one-time-code" placeholder="000000" maxlength="6" inputmode="numeric">
         </div>
-        <button class="login-btn" id="btn-totp" onclick="submitTOTP()">Verify</button>
+        <button class="login-btn" id="btn-totp" data-action="submit-totp">Verify</button>
         <div class="login-err" id="err-totp"></div>
-        <button class="login-back" onclick="backToPassword()">Back</button>
+        <button class="login-back" data-action="back-to-password">Back</button>
       </div>
     </div>
   </div>
@@ -465,13 +44,13 @@
 
       <!-- Mode -->
       <div class="mode-bar">
-        <button class="mode-btn active" id="mode-btn-temporary" onclick="selectSetupMode('temporary')">
+        <button class="mode-btn active" id="mode-btn-temporary" data-action="select-setup-mode" data-mode="temporary">
           <strong>Temporary</strong>
           <span>In-memory only. Restart returns to this wizard. Great for testing.</span>
         </button>
-        <button class="mode-btn" id="mode-btn-persistent" onclick="selectSetupMode('persistent')">
+        <button class="mode-btn" id="mode-btn-persistent" data-action="select-setup-mode" data-mode="persistent">
           <strong>Persistent</strong>
-          <span>Saves users, services, and secrets locally so the gateway survives restarts.</span>
+          <span>Saves users and secrets locally so the gateway survives restarts.</span>
         </button>
       </div>
 
@@ -480,15 +59,12 @@
         <hr class="setup-divider">
         <div class="setup-section-label">TOTP Secret Storage</div>
         <div class="vault-chips">
-          <button class="vault-chip active" id="vchip-file" onclick="selectVault('file')">Local File</button>
-          <button class="vault-chip" id="vchip-hashicorp" onclick="selectVault('hashicorp')">Hashicorp Vault</button>
-          <button class="vault-chip" id="vchip-aws" onclick="selectVault('aws')">AWS</button>
-          <button class="vault-chip" id="vchip-gcp" onclick="selectVault('gcp')">GCP</button>
-          <button class="vault-chip" id="vchip-azure" onclick="selectVault('azure')">Azure</button>
-          <button class="vault-chip" id="vchip-cyberark" onclick="selectVault('cyberark')">CyberArk</button>
-          <button class="vault-chip" id="vchip-1password" onclick="selectVault('1password')">1Password</button>
-          <button class="vault-chip" id="vchip-http" onclick="selectVault('http')">HTTP</button>
-          <button class="vault-chip" id="vchip-exec" onclick="selectVault('exec')">Exec</button>
+          <button class="vault-chip active" id="vchip-file" data-action="select-vault" data-vault="file">Local File</button>
+          <button class="vault-chip" id="vchip-hashicorp" data-action="select-vault" data-vault="hashicorp">Hashicorp Vault</button>
+          <button class="vault-chip" id="vchip-aws" data-action="select-vault" data-vault="aws">AWS</button>
+          <button class="vault-chip" id="vchip-gcp" data-action="select-vault" data-vault="gcp">GCP</button>
+          <button class="vault-chip" id="vchip-azure" data-action="select-vault" data-vault="azure">Azure</button>
+          <button class="vault-chip" id="vchip-1password" data-action="select-vault" data-vault="1password">1Password</button>
         </div>
         <div id="setup-vault-file-row" style="margin-bottom:10px">
           <div class="form-field" style="max-width:260px">
@@ -502,12 +78,56 @@
             <div class="form-field"><label>Engine</label><input class="form-input" id="setup-vault-engine" placeholder="secret"></div>
           </div>
         </div>
+        <div id="setup-vault-aws-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>AWS Region</label><input class="form-input" id="setup-aws-region" placeholder="us-east-1"></div>
+            <div class="form-field"><label>AWS Profile</label><input class="form-input" id="setup-aws-profile" placeholder="default"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>Access Key ID</label><input class="form-input" id="setup-aws-access-key-id" placeholder="AKIA..."></div>
+            <div class="form-field"><label>Secret Access Key</label><input class="form-input" type="password" id="setup-aws-secret-access-key" placeholder="optional if host auth already exists"></div>
+          </div>
+          <div class="form-field"><label>Session Token</label><input class="form-input" type="password" id="setup-aws-session-token" placeholder="optional"></div>
+          <div class="inline-note">Uses the `aws` CLI. Region/profile can be stored here. Existing host IAM or CLI auth still works.</div>
+        </div>
+        <div id="setup-vault-gcp-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>GCP Project</label><input class="form-input" id="setup-gcp-project" placeholder="my-project-id"></div>
+            <div class="form-field"><label>Credentials File</label><input class="form-input" id="setup-gcp-creds-file" placeholder="/path/to/service-account.json"></div>
+          </div>
+          <div class="inline-note">Uses the `gcloud` CLI. Set a project and optionally a service-account credential file override.</div>
+        </div>
+        <div id="setup-vault-azure-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>Vault Name</label><input class="form-input" id="setup-azure-vault-name" placeholder="my-key-vault"></div>
+            <div class="form-field"><label>Tenant ID</label><input class="form-input" id="setup-azure-tenant-id" placeholder="optional"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>Client ID</label><input class="form-input" id="setup-azure-client-id" placeholder="optional"></div>
+            <div class="form-field"><label>Client Secret</label><input class="form-input" type="password" id="setup-azure-client-secret" placeholder="optional"></div>
+          </div>
+          <div class="inline-note">Uses the `az` CLI. Vault name is required. CLI authentication on the host may still be needed.</div>
+        </div>
+        <div id="setup-vault-1password-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>Vault Name</label><input class="form-input" id="setup-op-vault" placeholder="Private"></div>
+            <div class="form-field"><label>Service Account Token</label><input class="form-input" type="password" id="setup-op-token" placeholder="optional if op is already signed in"></div>
+          </div>
+          <div class="inline-note">Uses the `op` CLI. A stored service-account token works best for unattended startup.</div>
+        </div>
+        <details style="margin-bottom:12px">
+          <summary class="inline-note" style="cursor:pointer">Advanced vault providers</summary>
+          <div class="vault-chips" style="margin-top:10px">
+            <button class="vault-chip" id="vchip-cyberark" data-action="select-vault" data-vault="cyberark">CyberArk</button>
+            <button class="vault-chip" id="vchip-http" data-action="select-vault" data-vault="http">HTTP</button>
+            <button class="vault-chip" id="vchip-exec" data-action="select-vault" data-vault="exec">Exec</button>
+          </div>
+        </details>
 
         <div class="setup-section-label" style="margin-top:14px">Service Secret Storage</div>
         <div class="vault-chips">
-          <button class="vault-chip active" id="sschip-memory" onclick="selectServiceSecrets('memory')">Memory</button>
-          <button class="vault-chip" id="sschip-file" onclick="selectServiceSecrets('file')">Local File</button>
-          <button class="vault-chip" id="sschip-encrypted_file" onclick="selectServiceSecrets('encrypted_file')">Encrypted File</button>
+          <button class="vault-chip active" id="sschip-file" data-action="select-service-secrets" data-secret-mode="file">Non-Encrypted File</button>
+          <button class="vault-chip" id="sschip-encrypted_file" data-action="select-service-secrets" data-secret-mode="encrypted_file">Encrypted File</button>
         </div>
         <div id="setup-master-row" style="display:none;margin-bottom:4px">
           <div class="form-field"><label>Master Password</label>
@@ -521,8 +141,8 @@
       <div style="margin-bottom:16px">
         <div class="form-field" style="max-width:160px">
           <label>Port</label>
-          <input class="form-input" type="text" id="setup-port" placeholder="8080">
-          <div class="inline-note">Default 8080. Port change requires restart.</div>
+          <input class="form-input" type="text" id="setup-port" placeholder="8989">
+          <div class="inline-note">Default 8989. Port change requires restart.</div>
         </div>
       </div>
 
@@ -537,19 +157,14 @@
         </div>
       </div>
 
-      <!-- Services -->
       <div class="setup-section-label">API Services</div>
-      <div class="toggle-line" style="margin-bottom:10px">
-        <input type="checkbox" id="setup-demo-mode" checked>
-        <label for="setup-demo-mode" style="cursor:pointer">Use demo endpoints (httpbin.org) when no custom service is added.</label>
+      <div class="setup-copy" style="margin-bottom:18px">
+        Finish the admin setup first. API endpoints can be added right after login from the Users page.
       </div>
-      <div class="service-builder" id="setup-services"></div>
-      <button class="btn-ghost" type="button" onclick="addSetupService()" style="margin-bottom:18px">+ Add Service</button>
 
       <!-- Submit -->
-      <button class="login-btn" id="btn-setup" onclick="completeSetup()">Complete Setup</button>
+      <button class="login-btn" id="btn-setup" data-action="complete-setup">Complete Setup</button>
       <div class="login-err" id="err-setup"></div>
-      <button class="login-back" onclick="resetSetupFlow()" style="margin-top:10px">Wipe State &amp; Start Over</button>
     </div>
   </div>
 
@@ -566,9 +181,8 @@
         <label>Password</label>
         <input type="password" id="bootstrap-password" autocomplete="new-password" placeholder="............">
       </div>
-      <button class="login-btn" id="btn-bootstrap" onclick="submitBootstrap()">Create Admin</button>
+      <button class="login-btn" id="btn-bootstrap" data-action="submit-bootstrap">Create Admin</button>
       <div class="login-err" id="err-bootstrap"></div>
-      <button class="login-back" onclick="resetSetupFlow()" style="margin-top:10px">Wipe State &amp; Start Over</button>
     </div>
   </div>
 
@@ -578,7 +192,7 @@
     <!-- Header -->
     <div class="header">
       <div class="header-left">
-        <h1 onclick="switchPage('portal')">Apig0</h1>
+        <h1 data-action="switch-page" data-page="portal">Apig0</h1>
         <span class="gateway-url" id="gateway-url"></span>
       </div>
       <div class="header-right">
@@ -588,41 +202,325 @@
           <div class="conn-dot" id="conn-dot"></div>
           <span id="conn-text">Disconnected</span>
         </div>
-        <button class="logout-btn" onclick="logout()">Logout</button>
+        <button class="logout-btn" data-action="logout">Logout</button>
       </div>
     </div>
 
     <!-- Navigation tabs -->
     <div class="nav">
-      <button class="nav-tab active" id="nav-portal" onclick="switchPage('portal')">Portal</button>
-      <button class="nav-tab admin-only" id="nav-monitor" onclick="switchPage('monitor')">Monitor</button>
-      <button class="nav-tab admin-only" id="nav-users" onclick="switchPage('users')">Users</button>
-      <button class="nav-tab admin-only" id="nav-ratelimits" onclick="switchPage('ratelimits')">Rate Limits</button>
+      <button class="nav-tab active" id="nav-portal" data-action="switch-page" data-page="portal">Portal</button>
+      <button class="nav-tab admin-only" id="nav-monitor" data-action="switch-page" data-page="monitor">Monitor</button>
+      <button class="nav-tab admin-only" id="nav-users" data-action="switch-page" data-page="users">Users</button>
+      <button class="nav-tab admin-only" id="nav-ratelimits" data-action="switch-page" data-page="ratelimits">Rate Limits</button>
     </div>
 
     <!-- ═══════════════════ PORTAL PAGE ═══════════════════ -->
     <div class="page active" id="page-portal">
       <div class="welcome">
         <h2 id="welcome-msg">Welcome</h2>
-        <p>Select a service below or use the API paths directly.</p>
+        <p>Select a service and stage copy/paste-ready gateway commands for your own terminal.</p>
       </div>
-      <div class="section-title">Available Services</div>
-      <div class="portal-services" id="portal-services">
-        <div style="color:var(--text-dim);font-size:13px">Loading...</div>
-      </div>
-      <div class="section-title">Session</div>
-      <div class="session-card">
-        <div class="stat-item">
-          <div class="stat-val" style="color:var(--green)" id="sess-status">Active</div>
-          <div class="stat-label">Status</div>
+      <div class="portal-layout">
+        <div class="portal-column portal-column-left">
+          <div class="section-title">Available Services</div>
+          <div class="portal-services" id="portal-services">
+            <div style="color:var(--text-dim);font-size:13px">Loading...</div>
+          </div>
+          <div class="section-title">Session</div>
+          <div class="session-card">
+            <div class="stat-item">
+              <div class="stat-val" style="color:var(--green)" id="sess-status">Active</div>
+              <div class="stat-label">Status</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-val" id="sess-user">-</div>
+              <div class="stat-label">User</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-val" id="sess-role">-</div>
+              <div class="stat-label">Role</div>
+            </div>
+          </div>
         </div>
-        <div class="stat-item">
-          <div class="stat-val" id="sess-user">-</div>
-          <div class="stat-label">User</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-val" id="sess-role">-</div>
-          <div class="stat-label">Role</div>
+
+        <div class="portal-column portal-column-main">
+          <div class="setup-card portal-generator-card">
+            <div class="users-toolbar" style="margin-bottom:12px">
+              <h2 id="portal-surface-title">API Access</h2>
+              <span class="service-muted" id="portal-selected-service-copy">Select a service to begin</span>
+            </div>
+            <div class="notice" id="portal-generator-notice"></div>
+            <div class="portal-context-card" id="portal-pending-delivery-card" style="display:none;margin-bottom:12px">
+              <div class="portal-context-title">Pending Key Delivery</div>
+              <div class="portal-context-copy" id="portal-pending-delivery-copy">A gateway key is waiting for this user to claim once.</div>
+              <div class="form-actions" style="margin-top:10px">
+                <button class="btn-primary" data-action="portal-claim-next-key" id="portal-claim-next-key">Claim Key</button>
+                <button class="btn-ghost" data-action="portal-refresh-pending-keys">Refresh</button>
+              </div>
+            </div>
+            <div class="portal-generator-meta">
+              <div class="portal-generator-copy" id="portal-surface-copy">Use the assigned gateway key with the request generator below, then copy the command into curl, Postman, Bruno, or any client you prefer.</div>
+              <div class="form-actions" id="portal-surface-actions">
+                <button class="btn-primary" data-action="portal-copy-command">Copy Command</button>
+                <button class="btn-ghost" data-action="portal-copy-endpoint">Copy Endpoint</button>
+              </div>
+            </div>
+
+            <div id="portal-standard-interface">
+            <div class="portal-builder-grid">
+              <div class="portal-builder-form">
+                <div class="portal-empty-state" id="portal-service-empty">
+                  Waiting for an admin to create and assign a service. Once one is ready for this account, it will appear on the left ready to use.
+                </div>
+                <div class="portal-service-ready" id="portal-service-ready">
+                  <div class="form-group">
+                    <label>Gateway API Endpoint</label>
+                    <div class="portal-endpoint" id="portal-endpoint">Select a service to generate commands.</div>
+                  </div>
+                  <div class="portal-empty-state portal-token-empty" id="portal-token-empty">
+                    No active gateway key is assigned to this username. Command generation stays limited until an admin creates one for this user.
+                  </div>
+                  <div class="portal-service-strip">
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Key Type</span>
+                      <strong class="portal-mini-value" id="portal-key-type">Standard</strong>
+                    </div>
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Key Prefix</span>
+                      <strong class="portal-mini-value" id="portal-key-prefix">-</strong>
+                    </div>
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Key Status</span>
+                      <strong class="portal-mini-value" id="portal-token-status">Missing</strong>
+                    </div>
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Method</span>
+                      <strong class="portal-mini-value" id="portal-method-status">GET</strong>
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button class="btn-primary" id="portal-copy-command-top" data-action="portal-copy-command">Copy Command</button>
+                    <button class="btn-ghost" id="portal-copy-endpoint-main" data-action="portal-copy-endpoint">Copy Endpoint</button>
+                  </div>
+                </div>
+
+                <details class="portal-config-drawer" id="portal-config-drawer">
+                  <summary class="portal-helper-summary">
+                    <span>Advanced Request Setup</span>
+                    <span class="service-muted">Method, token, headers, body</span>
+                  </summary>
+                  <div class="portal-helper-body">
+                    <div class="portal-form-row">
+                      <div class="form-group" style="margin:0">
+                        <label>Method</label>
+                        <select class="form-select" id="portal-method">
+                          <option>GET</option>
+                          <option>POST</option>
+                          <option>PUT</option>
+                          <option>PATCH</option>
+                          <option>DELETE</option>
+                        </select>
+                      </div>
+                      <div class="form-group" style="margin:0">
+                        <label>Path</label>
+                        <input class="form-input" id="portal-path" autocomplete="off" spellcheck="false" placeholder="/v1/items">
+                      </div>
+                    </div>
+
+                    <div class="form-group">
+                      <label>Gateway Key Override</label>
+                      <textarea class="form-textarea portal-token-input" id="portal-token" placeholder="Paste a claimed gateway key to embed it into the generated command. Leave blank to keep a safe placeholder."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                      <label>Custom Headers</label>
+                      <textarea class="form-textarea portal-headers-input" id="portal-headers" spellcheck="false" placeholder="X-Team: demo&#10;X-Trace-Id: local-run"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                      <label>JSON Body</label>
+                      <textarea class="form-textarea portal-body-input" id="portal-body" spellcheck="false" placeholder='{"name":"example"}'></textarea>
+                    </div>
+
+                    <div class="portal-inline-options">
+                      <label class="checkbox" style="margin:0">
+                        <input type="checkbox" id="portal-insecure" checked>
+                        <span>Include insecure TLS flag for self-signed setups</span>
+                      </label>
+                      <button class="btn-ghost" data-action="portal-reset-builder">Reset</button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <div class="portal-builder-side">
+                <details class="portal-helper-drawer">
+                  <summary class="portal-helper-summary">
+                    <span>Command Helpers</span>
+                    <span class="service-muted">Hidden until you open them</span>
+                  </summary>
+                  <div class="portal-helper-body">
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Quick Start</div>
+                      <div class="portal-context-copy" id="portal-context-copy">Choose a service, adjust method and path, then copy a command into your client or automation tool.</div>
+                    </div>
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Active Headers</div>
+                      <pre class="portal-context-block" id="portal-header-block">Authorization: Bearer &lt;paste-token&gt;</pre>
+                    </div>
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Shell Exports</div>
+                      <pre class="portal-context-block" id="portal-env-block">export APIG0_BASE="https://host:8989"
+export APIG0_SERVICE="service"
+export APIG0_TOKEN="paste-token"</pre>
+                    </div>
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Copy Targets</div>
+                      <pre class="portal-context-block">Copy Command
+Copy Headers
+Copy Auth Header
+Copy Endpoint</pre>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+          <div class="portal-response-grid">
+            <div class="setup-card portal-console-card">
+              <div class="users-toolbar" style="margin-bottom:12px">
+                <h2>Request Generator</h2>
+                <span class="service-muted" id="portal-response-meta">Copy-ready output</span>
+              </div>
+              <div class="portal-empty-state portal-token-empty" id="portal-terminal-empty">
+                No active gateway key is assigned to this account yet.
+              </div>
+              <details class="portal-preview-drawer" open>
+                <summary class="portal-helper-summary">
+                  <span>curl</span>
+                  <span class="service-muted">Generated request preview</span>
+                </summary>
+                <div class="portal-helper-body">
+                  <div class="portal-response-shell">
+                    <div class="portal-response-headers" id="portal-response-headers">Active request details will appear here.</div>
+                    <pre class="portal-response-body" id="portal-response-body">Choose a service to generate a command.</pre>
+                  </div>
+                </div>
+              </details>
+              <div class="form-actions" style="margin-top:12px">
+                <button class="btn-primary" id="portal-copy-command-button" data-action="portal-copy-command">Copy Command</button>
+                <button class="btn-ghost" data-action="portal-copy-headers">Copy Headers</button>
+                <button class="btn-ghost" data-action="portal-copy-auth-header">Copy Auth Header</button>
+                <button class="btn-ghost" data-action="portal-copy-endpoint">Copy Endpoint</button>
+              </div>
+            </div>
+            </div>
+            </div>
+
+            <div id="portal-ai-interface" style="display:none">
+              <div class="portal-builder-grid">
+                <div class="portal-builder-form">
+                  <div class="portal-service-ready" style="display:flex">
+                    <div class="form-group">
+                      <label>Gateway API Base URL</label>
+                      <div class="portal-endpoint" id="portal-ai-endpoint">https://host/openai/v1</div>
+                    </div>
+                    <div class="portal-empty-state portal-token-empty" id="portal-ai-token-empty">
+                      No active AI key is assigned to this username yet.
+                    </div>
+                    <div class="portal-service-strip">
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Key Type</span>
+                        <strong class="portal-mini-value" id="portal-ai-key-type">AI</strong>
+                      </div>
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Key Prefix</span>
+                        <strong class="portal-mini-value" id="portal-ai-key-prefix">-</strong>
+                      </div>
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Assigned Backend</span>
+                        <strong class="portal-mini-value" id="portal-ai-service">-</strong>
+                      </div>
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Models</span>
+                        <strong class="portal-mini-value" id="portal-ai-model-count">All</strong>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button class="btn-primary" data-action="portal-copy-ai-base-url">Copy Base URL</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="portal-builder-side">
+                  <div class="portal-context-card">
+                    <div class="portal-context-title">AI Models</div>
+                    <pre class="portal-context-block" id="portal-ai-models">All models allowed for this key.</pre>
+                  </div>
+                  <div class="portal-context-card">
+                    <div class="portal-context-title">Providers</div>
+                    <pre class="portal-context-block" id="portal-ai-providers">All providers allowed for this key.</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="portal-response-grid">
+                <div class="setup-card portal-console-card">
+                  <div class="users-toolbar" style="margin-bottom:12px">
+                    <h2>Quick Start</h2>
+                    <span class="service-muted" id="portal-ai-meta">Universal AI gateway key</span>
+                  </div>
+                  <details class="portal-preview-drawer" open>
+                    <summary class="portal-helper-summary">
+                      <span>curl</span>
+                      <span class="service-muted">AI gateway request</span>
+                    </summary>
+                    <div class="portal-helper-body">
+                      <div class="portal-response-shell">
+                        <pre class="portal-response-body" id="portal-ai-curl">AI key setup will appear here.</pre>
+                      </div>
+                    </div>
+                  </details>
+                  <div class="form-actions" style="margin-top:12px">
+                    <button class="btn-primary" data-action="portal-copy-ai-curl">Copy curl</button>
+                  </div>
+                </div>
+
+                <div class="setup-card portal-console-card">
+                  <div class="users-toolbar" style="margin-bottom:12px">
+                    <h2>OpenAI-Compatible Snippets</h2>
+                    <span class="service-muted">Use your gateway key instead of the upstream provider key</span>
+                  </div>
+                  <details class="portal-preview-drawer" open>
+                    <summary class="portal-helper-summary">
+                      <span>Python</span>
+                      <span class="service-muted">SDK-compatible example</span>
+                    </summary>
+                    <div class="portal-helper-body">
+                      <div class="portal-response-shell">
+                        <pre class="portal-response-body" id="portal-ai-python">Python snippet will appear here.</pre>
+                      </div>
+                    </div>
+                  </details>
+                  <details class="portal-preview-drawer">
+                    <summary class="portal-helper-summary">
+                      <span>JavaScript</span>
+                      <span class="service-muted">SDK-compatible example</span>
+                    </summary>
+                    <div class="portal-helper-body">
+                      <div class="portal-response-shell">
+                        <pre class="portal-response-body" id="portal-ai-javascript">JavaScript snippet will appear here.</pre>
+                      </div>
+                    </div>
+                  </details>
+                  <div class="form-actions" style="margin-top:12px">
+                    <button class="btn-primary" data-action="portal-copy-ai-python">Copy Python</button>
+                    <button class="btn-ghost" data-action="portal-copy-ai-javascript">Copy JavaScript</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -651,8 +549,8 @@
         <div class="log-header">
           <h2>Live Requests</h2>
           <div class="log-controls">
-            <button id="btn-pause" onclick="togglePause()">Pause</button>
-            <button onclick="clearLog()">Clear</button>
+            <button id="btn-pause" data-action="toggle-pause">Pause</button>
+            <button data-action="clear-log">Clear</button>
           </div>
         </div>
         <div class="log-body" id="log-body">
@@ -670,6 +568,28 @@
         <h2>Test Console</h2>
         <div class="console-row" id="test-console-buttons"></div>
         <div class="test-result" id="test-result"></div>
+        <div class="svc-access-panel" id="svc-access-panel">
+          <div class="svc-access-header">
+            <span class="svc-access-title">User access — <span id="svc-access-name"></span></span>
+            <button class="btn-ghost" style="padding:2px 8px;font-size:11px" data-action="close-service-access-panel">✕ close</button>
+          </div>
+          <div class="svc-access-users" id="svc-access-users">
+            <span class="svc-access-empty">Loading...</span>
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn-primary" style="padding:5px 14px;font-size:11px" data-action="save-service-access">Save Access</button>
+          </div>
+        </div>
+      </div>
+      <div class="setup-card" style="margin-top:18px">
+        <div class="users-toolbar" style="margin-bottom:10px">
+          <h2>Audit Trail</h2>
+          <button class="btn-ghost" data-action="refresh-audit">Refresh</button>
+        </div>
+        <table class="user-table">
+          <thead><tr><th>When</th><th>User</th><th>Source</th><th>Service</th><th>Route</th><th>Decision</th><th>Reason</th></tr></thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -699,13 +619,119 @@
         <div class="status-copy" id="users-reset-copy"></div>
         <div class="status-copy" id="users-recovery-copy" style="margin-top:8px"></div>
         <div id="upgrade-storage-btn-wrap" style="margin-top:14px;display:none">
-          <button class="btn-primary" onclick="showUpgradeModal()">Upgrade to Persistent</button>
+          <button class="btn-primary" data-action="show-upgrade-modal">Upgrade to Persistent</button>
           <span style="font-size:11px;color:var(--text-dim);margin-left:10px">Save current state to disk so the gateway survives restarts</span>
+        </div>
+        <div class="form-actions" style="margin-top:14px">
+          <button class="btn-danger" id="btn-admin-reset" data-action="admin-reset-setup">Hard Reset Gateway</button>
+          <span style="font-size:11px;color:var(--text-dim)">Admin-only. Wipes setup, users, services, secrets, and active sessions.</span>
         </div>
       </div>
       <div class="users-toolbar">
+        <h2>API Endpoints</h2>
+        <button class="btn-primary" data-action="toggle-service-form">+ New API</button>
+      </div>
+      <div class="setup-copy" style="margin:-6px 0 14px">After setup, add or update API endpoints and saved keys here. New enabled APIs will immediately become available in admin routing and user access settings.</div>
+      <div class="status-copy" id="service-secret-storage-copy" style="margin:-8px 0 14px"></div>
+      <div class="create-form" id="service-form">
+        <h3 id="service-form-title" style="font-size:14px;color:var(--blue);margin-bottom:12px">New API Endpoint</h3>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Name</label>
+            <input class="form-input" id="service-name" placeholder="orders" type="text">
+          </div>
+          <div class="form-field">
+            <label>Base URL</label>
+            <input class="form-input" id="service-base-url" placeholder="https://api.example.com" type="text">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:180px">
+            <label>Auth Type</label>
+            <select class="form-input" id="service-auth-type" data-change-action="update-service-auth-fields">
+              <option value="none">none</option>
+              <option value="bearer">bearer</option>
+              <option value="x-api-key">x-api-key</option>
+              <option value="custom-header">custom-header</option>
+              <option value="basic">basic</option>
+            </select>
+          </div>
+          <div class="form-field" id="service-header-row" style="display:none">
+            <label>Header Name</label>
+            <input class="form-input" id="service-header-name" placeholder="X-API-Key" type="text">
+          </div>
+          <div class="form-field" id="service-basic-row" style="display:none">
+            <label>Basic Username</label>
+            <input class="form-input" id="service-basic-username" placeholder="service-user" type="text">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" id="service-secret-row" style="display:none">
+            <label>Saved Key / Secret</label>
+            <input class="form-input" id="service-secret" placeholder="leave blank to keep current saved value" type="password">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:160px">
+            <label>Timeout (ms)</label>
+            <input class="form-input" id="service-timeout-ms" type="number" min="100" step="100" value="10000">
+          </div>
+          <div class="form-field" style="max-width:160px">
+            <label>Safe Retries</label>
+            <input class="form-input" id="service-retry-count" type="number" min="0" max="3" value="0">
+          </div>
+          <div class="form-field" id="service-secret-expiry-row" style="display:none">
+            <label>Secret Expires At</label>
+            <input class="form-input" id="service-secret-expires" type="datetime-local">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:220px">
+            <label>Provider</label>
+            <select class="form-input" id="service-provider">
+              <option value="">none</option>
+              <option value="openai">openai</option>
+              <option value="anthropic">anthropic</option>
+              <option value="hermes">hermes</option>
+              <option value="ollama">ollama</option>
+              <option value="vllm">vllm</option>
+              <option value="custom">custom</option>
+            </select>
+          </div>
+          <div class="form-field" style="align-self:end">
+            <label class="checkbox" style="margin:0">
+              <input type="checkbox" id="service-openai-compatible">
+              <span>Expose this service through the AI gateway (`/openai/v1`)</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" id="service-secret-notes-row" style="display:none">
+            <label>Secret Notes</label>
+            <input class="form-input" id="service-secret-notes" placeholder="rotation note or owner" type="text">
+          </div>
+        </div>
+        <div class="toggle-line" id="service-clear-secret-wrap" style="display:none">
+          <input type="checkbox" id="service-clear-secret" data-change-action="toggle-service-secret-clear">
+          <label for="service-clear-secret" style="cursor:pointer">Clear the saved key for this API</label>
+        </div>
+        <div class="toggle-line" style="margin-top:8px">
+          <input type="checkbox" id="service-enabled" checked>
+          <label for="service-enabled" style="cursor:pointer">Enabled and visible for routing/user access</label>
+        </div>
+        <div class="inline-note" id="service-form-note">Use this section to add endpoints after setup, rotate saved keys, or disable APIs without deleting them.</div>
+        <div class="form-actions">
+          <button class="btn-primary" data-action="save-service">Save API</button>
+          <button class="btn-ghost" data-action="cancel-service-form">Cancel</button>
+        </div>
+      </div>
+      <table class="user-table" style="margin-bottom:18px">
+        <thead><tr><th>Name</th><th>Base URL</th><th>Auth</th><th>Retries</th><th>Saved Key</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="services-tbody"></tbody>
+      </table>
+      <div class="users-toolbar">
         <h2>User Management</h2>
-        <button class="btn-primary" onclick="toggleCreateForm()">+ New User</button>
+        <button class="btn-primary" data-action="toggle-create-user-form">+ New User</button>
       </div>
       <div class="create-form" id="create-form">
         <div class="form-row">
@@ -733,40 +759,120 @@
           </div>
         </div>
         <div class="form-actions">
-          <button class="btn-primary" onclick="createUser()">Create</button>
-          <button class="btn-ghost" onclick="toggleCreateForm()">Cancel</button>
+          <button class="btn-primary" data-action="create-user">Create</button>
+          <button class="btn-ghost" data-action="toggle-create-user-form">Cancel</button>
         </div>
       </div>
       <table class="user-table">
         <thead><tr><th>Username</th><th>Role</th><th>Allowed APIs</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody id="users-tbody"></tbody>
       </table>
+      <div class="users-toolbar" style="margin-top:18px">
+        <h2>Gateway Tokens</h2>
+        <button class="btn-primary" data-action="toggle-token-form">+ New Token</button>
+      </div>
+      <div class="create-form" id="token-form">
+        <div class="form-row">
+          <div class="form-field">
+            <label>Token Name</label>
+            <input class="form-input" id="token-name" placeholder="ops-cli" type="text">
+          </div>
+          <div class="form-field">
+            <label>User</label>
+            <input class="form-input" id="token-user" placeholder="alice" type="text">
+          </div>
+          <div class="form-field">
+            <label>Expires At</label>
+            <input class="form-input" id="token-expires" type="datetime-local">
+          </div>
+          <div class="form-field" style="max-width:160px">
+            <label>Key Type</label>
+            <select class="form-input" id="token-key-type" data-change-action="update-token-type-fields">
+              <option value="standard">standard</option>
+              <option value="ai">ai</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Allowed APIs</label>
+            <div class="service-checks" id="token-service-checks"></div>
+            <div class="service-muted">Leave everything checked to follow the user’s normal access. Uncheck to scope the token tighter.</div>
+          </div>
+        </div>
+        <details class="portal-config-drawer" style="margin-top:8px;display:none" id="token-ai-scope">
+          <summary class="portal-helper-summary">
+            <span>AI Gateway Scope</span>
+            <span class="service-muted">Universal AI key settings</span>
+          </summary>
+          <div class="portal-helper-body">
+            <div class="form-row">
+              <div class="form-field">
+                <label>AI Service</label>
+                <select class="form-input" id="token-openai-service"></select>
+                <div class="service-muted">Pick the upstream AI service this key should use through the gateway.</div>
+              </div>
+              <div class="form-field" style="max-width:180px">
+                <label>Rate Limit RPM</label>
+                <input class="form-input" id="token-rate-limit-rpm" type="number" min="0" value="0">
+              </div>
+              <div class="form-field" style="max-width:180px">
+                <label>Burst</label>
+                <input class="form-input" id="token-rate-limit-burst" type="number" min="0" value="0">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>Allowed Models</label>
+                <textarea class="form-textarea" id="token-allowed-models" placeholder="gpt-4.1-mini&#10;claude-sonnet-4-20250514"></textarea>
+              </div>
+              <div class="form-field">
+                <label>Allowed Providers</label>
+                <textarea class="form-textarea" id="token-allowed-providers" placeholder="openai&#10;anthropic&#10;hermes"></textarea>
+              </div>
+            </div>
+            <div class="service-muted">Leave these blank to allow any model/provider available through the selected AI service.</div>
+          </div>
+        </details>
+        <div class="form-actions">
+          <button class="btn-primary" data-action="create-token">Create Token</button>
+          <button class="btn-ghost" data-action="toggle-token-form">Cancel</button>
+        </div>
+      </div>
+      <table class="user-table">
+        <thead><tr><th>Name</th><th>User</th><th>Scope</th><th>Expires</th><th>Last Used</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="tokens-tbody"></tbody>
+      </table>
     </div>
 
     <!-- ═══════════════════ RATE LIMITS PAGE (admin) ═══════════════════ -->
     <div class="page" id="page-ratelimits">
       <div class="notice" id="rl-notice"></div>
-      <h2 style="font-size:16px;font-weight:700;margin-bottom:20px">Rate Limit Configuration</h2>
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:8px">Rate Limit Configuration</h2>
+      <div class="setup-copy" style="margin-bottom:20px">
+        Apig0 uses a token-bucket limiter per user. The sustained limit controls the normal refill speed.
+        The burst allowance controls how many requests can pass immediately when traffic arrives all at once.
+      </div>
       <div class="rl-section">
         <div class="rl-section-title">Default (all users)</div>
         <div class="rl-row">
-          <div class="rl-label">Requests per minute <span class="rl-sublabel">Applied to every user unless overridden</span></div>
+          <div class="rl-label">Sustained limit <span class="rl-sublabel">Requests allowed per minute over normal use. Set 0 to disable limiting.</span></div>
           <input class="rl-input" id="rl-default-rpm" type="number" min="0" value="60">
-          <span class="rl-unit">rpm</span>
+          <span class="rl-unit">requests/min</span>
         </div>
         <div class="rl-row">
-          <div class="rl-label">Burst <span class="rl-sublabel">Max requests allowed in a spike</span></div>
+          <div class="rl-label">Burst allowance <span class="rl-sublabel">Immediate requests allowed before throttling, useful for page loads or short API fan-out.</span></div>
           <input class="rl-input" id="rl-default-burst" type="number" min="0" value="10">
-          <span class="rl-unit">req</span>
+          <span class="rl-unit">instant requests</span>
         </div>
       </div>
       <div class="rl-section">
         <div class="rl-section-title">Per-user overrides</div>
         <div id="rl-users-list"></div>
-        <button class="btn-ghost" style="font-size:12px;margin-top:6px" onclick="addRLUserRow()">+ Add user override</button>
+        <button class="btn-ghost" style="font-size:12px;margin-top:6px" data-action="add-rate-limit-user-row">+ Add user override</button>
       </div>
       <div style="margin-top:16px">
-        <button class="btn-primary" onclick="saveRateLimits()">Save Rate Limits</button>
+        <button class="btn-primary" data-action="save-rate-limits">Save Rate Limits</button>
       </div>
     </div>
 
@@ -780,11 +886,12 @@
 
       <div class="setup-section-label">TOTP Secret Storage</div>
       <div class="vault-chips" style="margin-bottom:14px">
-        <button class="vault-chip active" id="up-vchip-file" onclick="selectUpgradeVault('file')">Local File</button>
-        <button class="vault-chip" id="up-vchip-hashicorp" onclick="selectUpgradeVault('hashicorp')">Hashicorp</button>
-        <button class="vault-chip" id="up-vchip-aws" onclick="selectUpgradeVault('aws')">AWS</button>
-        <button class="vault-chip" id="up-vchip-gcp" onclick="selectUpgradeVault('gcp')">GCP</button>
-        <button class="vault-chip" id="up-vchip-azure" onclick="selectUpgradeVault('azure')">Azure</button>
+        <button class="vault-chip active" id="up-vchip-file" data-action="select-upgrade-vault" data-vault="file">Local File</button>
+        <button class="vault-chip" id="up-vchip-hashicorp" data-action="select-upgrade-vault" data-vault="hashicorp">Hashicorp</button>
+        <button class="vault-chip" id="up-vchip-aws" data-action="select-upgrade-vault" data-vault="aws">AWS</button>
+        <button class="vault-chip" id="up-vchip-gcp" data-action="select-upgrade-vault" data-vault="gcp">GCP</button>
+        <button class="vault-chip" id="up-vchip-azure" data-action="select-upgrade-vault" data-vault="azure">Azure</button>
+        <button class="vault-chip" id="up-vchip-1password" data-action="select-upgrade-vault" data-vault="1password">1Password</button>
       </div>
       <div id="up-vault-hashicorp-row" style="display:none;margin-bottom:10px">
         <div class="form-row">
@@ -792,11 +899,52 @@
           <div class="form-field"><label>Engine</label><input class="form-input" id="up-vault-engine" placeholder="secret"></div>
         </div>
       </div>
+      <div id="up-vault-aws-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>AWS Region</label><input class="form-input" id="up-aws-region" placeholder="us-east-1"></div>
+          <div class="form-field"><label>AWS Profile</label><input class="form-input" id="up-aws-profile" placeholder="default"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>Access Key ID</label><input class="form-input" id="up-aws-access-key-id" placeholder="AKIA..."></div>
+          <div class="form-field"><label>Secret Access Key</label><input class="form-input" type="password" id="up-aws-secret-access-key" placeholder="optional"></div>
+        </div>
+        <div class="form-field"><label>Session Token</label><input class="form-input" type="password" id="up-aws-session-token" placeholder="optional"></div>
+      </div>
+      <div id="up-vault-gcp-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>GCP Project</label><input class="form-input" id="up-gcp-project" placeholder="my-project-id"></div>
+          <div class="form-field"><label>Credentials File</label><input class="form-input" id="up-gcp-creds-file" placeholder="/path/to/service-account.json"></div>
+        </div>
+      </div>
+      <div id="up-vault-azure-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>Vault Name</label><input class="form-input" id="up-azure-vault-name" placeholder="my-key-vault"></div>
+          <div class="form-field"><label>Tenant ID</label><input class="form-input" id="up-azure-tenant-id" placeholder="optional"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>Client ID</label><input class="form-input" id="up-azure-client-id" placeholder="optional"></div>
+          <div class="form-field"><label>Client Secret</label><input class="form-input" type="password" id="up-azure-client-secret" placeholder="optional"></div>
+        </div>
+      </div>
+      <div id="up-vault-1password-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>Vault Name</label><input class="form-input" id="up-op-vault" placeholder="Private"></div>
+          <div class="form-field"><label>Service Account Token</label><input class="form-input" type="password" id="up-op-token" placeholder="optional"></div>
+        </div>
+      </div>
+      <details style="margin-bottom:12px">
+        <summary class="inline-note" style="cursor:pointer">Advanced vault providers</summary>
+        <div class="vault-chips" style="margin-top:10px">
+          <button class="vault-chip" id="up-vchip-cyberark" data-action="select-upgrade-vault" data-vault="cyberark">CyberArk</button>
+          <button class="vault-chip" id="up-vchip-http" data-action="select-upgrade-vault" data-vault="http">HTTP</button>
+          <button class="vault-chip" id="up-vchip-exec" data-action="select-upgrade-vault" data-vault="exec">Exec</button>
+        </div>
+      </details>
 
       <div class="setup-section-label" style="margin-top:10px">Service Secret Storage</div>
       <div class="vault-chips" style="margin-bottom:14px">
-        <button class="vault-chip active" id="up-sschip-file" onclick="selectUpgradeServiceSecrets('file')">Local File</button>
-        <button class="vault-chip" id="up-sschip-encrypted_file" onclick="selectUpgradeServiceSecrets('encrypted_file')">Encrypted File</button>
+        <button class="vault-chip active" id="up-sschip-file" data-action="select-upgrade-service-secrets" data-secret-mode="file">Non-Encrypted File</button>
+        <button class="vault-chip" id="up-sschip-encrypted_file" data-action="select-upgrade-service-secrets" data-secret-mode="encrypted_file">Encrypted File</button>
       </div>
       <div id="up-master-row" style="display:none;margin-bottom:10px">
         <div class="form-field"><label>Master Password</label>
@@ -806,8 +954,8 @@
 
       <div class="login-err" id="err-upgrade" style="margin-bottom:10px"></div>
       <div style="display:flex;gap:10px;margin-top:16px">
-        <button class="btn-primary" id="btn-upgrade" onclick="submitUpgrade()" style="flex:1">Save to Disk</button>
-        <button class="btn-ghost" onclick="closeUpgradeModal()" style="flex:1">Cancel</button>
+        <button class="btn-primary" id="btn-upgrade" data-action="submit-upgrade" style="flex:1">Save to Disk</button>
+        <button class="btn-ghost" data-action="close-upgrade-modal" style="flex:1">Cancel</button>
       </div>
     </div>
   </div>
@@ -819,1082 +967,21 @@
       <p id="qr-username-msg">Scan this QR code with an authenticator app.</p>
       <div id="qr-canvas"></div>
       <div class="qr-uri" id="qr-uri"></div>
-      <button class="btn-primary" style="width:100%" onclick="closeQR()">Done</button>
+      <button class="btn-primary" style="width:100%" data-action="close-qr">Done</button>
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script>
-// ── State ──
-const GW = window.location.origin;
-let currentUser = null;
-let currentRole = null;
-let pendingChallenge = null;
-let setupStatus = null;
-let paused = false;
-let autoScroll = true;
-let uptimeBase = 0;
-let uptimeOffset = 0;
-let totalReq = 0;
-let totalErr = 0;
-let svcData = {};
-let evtSource = null;
-let reconnectTimer = null;
-let serviceCatalog = [];
-let availableServices = [];
-let setupMode = 'temporary';
-let setupVaultType = 'file';
-let setupServiceSecretMode = 'memory';
-let setupServiceCounter = 0;
-const MAX_LOG_ROWS = 300;
-
-document.getElementById('gateway-url').textContent = GW;
-
-// ══════════════════════════════════════════════════════════
-// CSRF helper — reads the apig0_csrf cookie and returns headers
-// ══════════════════════════════════════════════════════════
-function csrfToken() {
-  const m = document.cookie.match('(?:^|; )apig0_csrf=([^;]*)');
-  return m ? decodeURIComponent(m[1]) : '';
-}
-function csrfHeaders(extra = {}) {
-  return Object.assign({'X-CSRF-Token': csrfToken()}, extra);
-}
-
-// ══════════════════════════════════════════════════════════
-// AUTH
-// ══════════════════════════════════════════════════════════
-
-async function init() {
-  // Fetch setup status — determines which screen to show
-  try {
-    const setupResp = await fetch(GW + '/api/setup/status');
-    if (!setupResp.ok) { showLogin(); return; }
-    setupStatus = await setupResp.json();
-    renderSetupStatus();
-  } catch {
-    // Server unreachable — show login so user can retry
-    showLogin();
-    return;
-  }
-
-  // Full setup still needed
-  if (setupStatus.setup_required) {
-    showSetup();
-    return;
-  }
-
-  // Setup done but no admin — show bootstrap-only form
-  if (setupStatus.bootstrap_required && !setupStatus.has_admin) {
-    showBootstrap();
-    return;
-  }
-
-  // Setup complete, admin exists — check session
-  try {
-    const resp = await fetch(GW + '/api/user/info');
-    if (!resp.ok) { showLogin(); return; }
-    const data = await resp.json();
-    onLogin(data.user, data.role);
-  } catch {
-    showLogin();
-  }
-}
-
-function hideAllOverlays() {
-  document.getElementById('setup-overlay').classList.remove('visible');
-  document.getElementById('login-overlay').classList.remove('visible');
-  document.getElementById('bootstrap-overlay').classList.remove('visible');
-  document.getElementById('app-shell').style.display = 'none';
-}
-
-function showLogin() {
-  pendingChallenge = null;
-  hideAllOverlays();
-  document.getElementById('login-username').value = '';
-  document.getElementById('login-password').value = '';
-  document.getElementById('login-totp').value = '';
-  setLoginErr('err-password', ''); setLoginErr('err-totp', '');
-  setLoginBusy('btn-password', false); setLoginBusy('btn-totp', false);
-  document.getElementById('step-totp').classList.remove('active');
-  document.getElementById('step-password').classList.add('active');
-  document.getElementById('login-overlay').classList.add('visible');
-  document.getElementById('login-username').focus();
-}
-
-function showSetup() {
-  hideAllOverlays();
-  document.getElementById('setup-overlay').classList.add('visible');
-  if (!document.getElementById('setup-services').children.length) addSetupService();
-  renderSetupFields();
-  document.getElementById('setup-username').focus();
-}
-
-function showBootstrap() {
-  hideAllOverlays();
-  document.getElementById('bootstrap-overlay').classList.add('visible');
-  document.getElementById('bootstrap-username').focus();
-}
-
-async function submitBootstrap() {
-  const username = document.getElementById('bootstrap-username').value.trim();
-  const password = document.getElementById('bootstrap-password').value;
-  if (!username || !password) { setLoginErr('err-bootstrap', 'Username and password required'); return; }
-  setLoginBusy('btn-bootstrap', true); setLoginErr('err-bootstrap', '');
-  try {
-    const resp = await fetch(GW + '/api/setup/bootstrap-admin', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username, password}),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { setLoginErr('err-bootstrap', data.error || 'Bootstrap failed'); return; }
-    setupStatus = data.status || setupStatus;
-    renderSetupStatus();
-    hideAllOverlays();
-    onLogin(data.user, data.role);
-    if (data.otpauth) showQR(username, data.otpauth);
-  } catch { setLoginErr('err-bootstrap', 'Network error'); }
-  finally { setLoginBusy('btn-bootstrap', false); }
-}
-
-function renderSetupStatus() {
-  if (!setupStatus) return;
-  const secretsText = setupStatus.secrets_backend + (setupStatus.secrets_path ? ' • ' + setupStatus.secrets_path : '');
-  const usersText = setupStatus.users_backend + (setupStatus.users_path ? ' • ' + setupStatus.users_path : '');
-  const isPersistent = setupStatus.persistent_configured;
-  const modeText = isPersistent ? 'Persistent' : 'Temporary (in-memory)';
-
-  const modeEl = document.getElementById('users-storage-mode');
-  if (modeEl) {
-    modeEl.textContent = modeText;
-    modeEl.className = 'status-value' + (isPersistent ? '' : ' warn');
-  }
-
-  const secretsEl = document.getElementById('users-secrets-status');
-  if (secretsEl) {
-    secretsEl.textContent = secretsText;
-    secretsEl.className = 'status-value' + (setupStatus.secrets_mode === 'persistent' ? '' : ' warn');
-  }
-
-  const storeEl = document.getElementById('users-store-status');
-  if (storeEl) storeEl.textContent = usersText;
-
-  const svcCountEl = document.getElementById('users-service-count');
-  if (svcCountEl) svcCountEl.textContent = (setupStatus.service_count || 0) + ' configured';
-
-  const resetEl = document.getElementById('users-reset-copy');
-  if (resetEl) resetEl.textContent = setupStatus.reset_behavior || '';
-
-  const recoveryEl = document.getElementById('users-recovery-copy');
-  if (recoveryEl) recoveryEl.textContent = setupStatus.recovery_hint || '';
-
-  // Show upgrade button only in temporary mode
-  const upgradeWrap = document.getElementById('upgrade-storage-btn-wrap');
-  if (upgradeWrap) upgradeWrap.style.display = isPersistent ? 'none' : 'block';
-
-  if (setupStatus.port) {
-    const portEl = document.getElementById('setup-port');
-    if (portEl) portEl.value = setupStatus.port;
-  }
-}
-
-async function refreshSetupStatus() {
-  try {
-    const resp = await fetch(GW + '/api/setup/status');
-    if (resp.ok) {
-      setupStatus = await resp.json();
-      renderSetupStatus();
-    }
-  } catch {}
-}
-
-function onLogin(user, role) {
-  currentUser = user;
-  currentRole = role || 'user';
-  loadSessionInfo();
-
-  hideAllOverlays();
-  document.getElementById('app-shell').style.display = '';
-
-  // Header
-  document.getElementById('hdr-user').textContent = user;
-  const roleBadge = document.getElementById('hdr-role');
-  roleBadge.textContent = currentRole;
-  roleBadge.className = 'role-badge' + (currentRole === 'admin' ? ' admin' : '');
-
-  // Portal info
-  document.getElementById('welcome-msg').textContent = 'Welcome, ' + user;
-  document.getElementById('sess-user').textContent = user;
-  document.getElementById('sess-role').textContent = currentRole;
-
-  // Show admin tabs if admin
-  const isAdmin = currentRole === 'admin';
-  document.querySelectorAll('.nav-tab.admin-only').forEach(t => {
-    t.classList.toggle('visible', isAdmin);
-  });
-  if (isAdmin) {
-    document.getElementById('conn-status').style.display = 'flex';
-  }
-
-  // Portal services
-  renderPortalServices();
-
-  // Start SSE if admin
-  if (isAdmin) {
-    connectSSE();
-  }
-
-  switchPage('portal');
-}
-
-async function loadSessionInfo() {
-  try {
-    const resp = await fetch(GW + '/api/user/info');
-    if (!resp.ok) return;
-    const data = await resp.json();
-    serviceCatalog = Array.isArray(data.service_catalog) ? data.service_catalog : [];
-    availableServices = Array.isArray(data.available_services) ? data.available_services : serviceCatalog.slice();
-    renderCreateServiceChecks();
-    renderPortalServices();
-    renderTestButtons();
-  } catch {}
-}
-
-function renderPortalServices() {
-  const container = document.getElementById('portal-services');
-  container.innerHTML = '';
-  const services = (availableServices.length ? availableServices : serviceCatalog).slice().sort();
-  if (!services.length) {
-    container.innerHTML = '<div style="color:var(--text-dim);font-size:13px">No APIs assigned to this account.</div>';
-    return;
-  }
-  for (const name of services) {
-    const a = document.createElement('a');
-    a.className = 'portal-svc';
-    a.href = GW + '/' + name;
-    a.target = '_blank';
-    a.innerHTML = '<div class="portal-svc-name">' + name + '</div><div class="portal-svc-url">' + GW + '/' + name + '</div>';
-    container.appendChild(a);
-  }
-}
-
-function renderTestButtons() {
-  const container = document.getElementById('test-console-buttons');
-  if (!container) return;
-  container.innerHTML = '';
-  const healthBtn = document.createElement('button');
-  healthBtn.className = 'test-btn';
-  healthBtn.textContent = 'healthz';
-  healthBtn.onclick = () => testEndpoint('/healthz');
-  container.appendChild(healthBtn);
-  for (const name of serviceCatalog.slice().sort()) {
-    const btn = document.createElement('button');
-    btn.className = 'test-btn';
-    btn.textContent = name;
-    btn.onclick = () => testEndpoint('/' + name);
-    container.appendChild(btn);
-  }
-}
-
-function backToPassword() {
-  pendingChallenge = null;
-  document.getElementById('step-totp').classList.remove('active');
-  document.getElementById('step-password').classList.add('active');
-  setLoginErr('err-totp', '');
-  document.getElementById('login-totp').value = '';
-  document.getElementById('login-password').focus();
-}
-
-function setLoginErr(id, msg) {
-  const el = document.getElementById(id);
-  el.textContent = msg;
-  el.classList.toggle('visible', msg !== '');
-}
-function setLoginBusy(id, busy) { document.getElementById(id).disabled = busy; }
-
-async function submitPassword() {
-  const username = document.getElementById('login-username').value.trim();
-  const password = document.getElementById('login-password').value;
-  if (!username || !password) { setLoginErr('err-password', 'Username and password required'); return; }
-  setLoginBusy('btn-password', true); setLoginErr('err-password', '');
-  try {
-    const resp = await fetch(GW + '/auth/login', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username, password}),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { setLoginErr('err-password', data.error || 'Login failed'); return; }
-    pendingChallenge = data.challenge;
-    document.getElementById('step-password').classList.remove('active');
-    document.getElementById('step-totp').classList.add('active');
-    document.getElementById('login-totp').focus();
-  } catch { setLoginErr('err-password', 'Network error'); }
-  finally { setLoginBusy('btn-password', false); }
-}
-
-async function submitTOTP() {
-  const code = document.getElementById('login-totp').value.trim();
-  if (!code) { setLoginErr('err-totp', 'Enter your 6-digit code'); return; }
-  setLoginBusy('btn-totp', true); setLoginErr('err-totp', '');
-  try {
-    const resp = await fetch(GW + '/auth/verify', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({challenge: pendingChallenge, code}),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { setLoginErr('err-totp', data.error || 'Verification failed'); return; }
-    onLogin(data.user, data.role);
-  } catch { setLoginErr('err-totp', 'Network error'); }
-  finally { setLoginBusy('btn-totp', false); }
-}
-
-async function logout() {
-  await fetch(GW + '/auth/logout', {method: 'POST', headers: csrfHeaders()});
-  if (evtSource) { evtSource.close(); evtSource = null; }
-  currentUser = null; currentRole = null;
-  setConnected(false);
-  showLogin();
-}
-
-function selectSetupMode(mode) {
-  setupMode = mode;
-  document.getElementById('mode-btn-temporary').classList.toggle('active', mode === 'temporary');
-  document.getElementById('mode-btn-persistent').classList.toggle('active', mode === 'persistent');
-  document.getElementById('setup-persistent-section').style.display = mode === 'persistent' ? 'block' : 'none';
-}
-
-function selectVault(type) {
-  setupVaultType = type;
-  document.querySelectorAll('.vault-chip[id^="vchip-"]').forEach(b => b.classList.remove('active'));
-  const chip = document.getElementById('vchip-' + type);
-  if (chip) chip.classList.add('active');
-  document.getElementById('setup-vault-file-row').style.display = type === 'file' ? 'block' : 'none';
-  document.getElementById('setup-vault-hashicorp-row').style.display = type === 'hashicorp' ? 'block' : 'none';
-}
-
-function selectServiceSecrets(mode) {
-  setupServiceSecretMode = mode;
-  document.querySelectorAll('.vault-chip[id^="sschip-"]').forEach(b => b.classList.remove('active'));
-  const chip = document.getElementById('sschip-' + mode);
-  if (chip) chip.classList.add('active');
-  document.getElementById('setup-master-row').style.display = mode === 'encrypted_file' ? 'block' : 'none';
-}
-
-function renderSetupFields() {
-  // no-op: all rendering is done by selectSetupMode / selectVault / selectServiceSecrets
-}
-
-function addSetupService() {
-  setupServiceCounter++;
-  const row = document.createElement('div');
-  row.className = 'service-row';
-  row.innerHTML =
-    '<h4>Service ' + setupServiceCounter + '</h4>' +
-    '<div class="form-row">' +
-      '<div class="form-field"><label>Name</label><input class="form-input setup-service-name" placeholder="orders"></div>' +
-      '<div class="form-field"><label>Base URL</label><input class="form-input setup-service-url" placeholder="https://api.example.com"></div>' +
-    '</div>' +
-    '<div class="form-row">' +
-      '<div class="form-field"><label>Auth Type</label><select class="form-input setup-service-auth">' +
-        '<option value="none">none</option>' +
-        '<option value="bearer">bearer</option>' +
-        '<option value="x-api-key">x-api-key</option>' +
-        '<option value="custom-header">custom-header</option>' +
-        '<option value="basic">basic</option>' +
-      '</select></div>' +
-      '<div class="form-field"><label>Header Name</label><input class="form-input setup-service-header" placeholder="X-API-Key"></div>' +
-      '<div class="form-field"><label>Basic Username</label><input class="form-input setup-service-basic-user" placeholder="only for basic auth"></div>' +
-    '</div>' +
-    '<div class="form-row">' +
-      '<div class="form-field"><label>Secret / API Key</label><input class="form-input setup-service-secret" type="password" placeholder="optional"></div>' +
-    '</div>' +
-    '<div class="form-actions"><button class="btn-danger" type="button" onclick="removeServiceRow(this)">Remove</button></div>';
-  document.getElementById('setup-services').appendChild(row);
-}
-
-function removeServiceRow(btn) {
-  btn.closest('.service-row').remove();
-}
-
-async function completeSetup() {
-  const username = document.getElementById('setup-username').value.trim();
-  const password = document.getElementById('setup-password').value;
-  if (!username || !password) { setLoginErr('err-setup', 'Admin username and password required'); return; }
-
-  const services = Array.from(document.querySelectorAll('#setup-services .service-row')).map((row) => ({
-    name: row.querySelector('.setup-service-name').value.trim(),
-    base_url: row.querySelector('.setup-service-url').value.trim(),
-    auth_type: row.querySelector('.setup-service-auth').value,
-    header_name: row.querySelector('.setup-service-header').value.trim(),
-    basic_username: row.querySelector('.setup-service-basic-user').value.trim(),
-    secret: row.querySelector('.setup-service-secret').value,
-    enabled: true
-  })).filter((svc) => svc.name && svc.base_url);
-
-  const isTemp = setupMode === 'temporary';
-  const vaultType  = isTemp ? 'env'    : setupVaultType;
-  const secretMode = isTemp ? 'memory' : setupServiceSecretMode;
-  const masterPw   = document.getElementById('setup-master-password').value;
-
-  if (!isTemp && secretMode === 'encrypted_file' && !masterPw) {
-    setLoginErr('err-setup', 'Master password required for encrypted file secrets');
-    return;
-  }
-
-  const payload = {
-    mode: setupMode,
-    port: document.getElementById('setup-port').value.trim() || '8080',
-    admin_username: username,
-    admin_password: password,
-    enable_demo: document.getElementById('setup-demo-mode').checked,
-    user_vault: {
-      type: vaultType,
-      address: (document.getElementById('setup-vault-address') || {}).value || '',
-      engine:  (document.getElementById('setup-vault-engine')  || {}).value || '',
-      file_path: (document.getElementById('setup-vault-file-path') || {}).value || ''
-    },
-    service_secrets: { mode: secretMode },
-    service_master_password: masterPw,
-    services
-  };
-
-  setLoginBusy('btn-setup', true); setLoginErr('err-setup', '');
-  try {
-    const resp = await fetch(GW + '/api/setup/complete', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json();
-    if (!resp.ok) {
-      if (data.status) {
-        setupStatus = data.status;
-        renderSetupStatus();
-      }
-      setLoginErr('err-setup', data.error || 'Bootstrap failed');
-      return;
-    }
-    setupStatus = data.status || setupStatus;
-    renderSetupStatus();
-    hideAllOverlays();
-    onLogin(data.user, data.role);
-    if (data.otpauth) showQR(username, data.otpauth);
-  } catch {
-    setLoginErr('err-setup', 'Network error');
-  } finally {
-    setLoginBusy('btn-setup', false);
-  }
-}
-
-async function resetSetupFlow() {
-  setLoginBusy('btn-setup', true);
-  setLoginBusy('btn-password', true);
-  setLoginBusy('btn-bootstrap', true);
-  setLoginErr('err-password', '');
-  setLoginErr('err-setup', '');
-  setLoginErr('err-bootstrap', '');
-  try {
-    const resp = await fetch(GW + '/api/setup/reset', {method: 'POST'});
-    const data = await resp.json();
-    if (!resp.ok) {
-      const errTarget = document.getElementById('setup-overlay').classList.contains('visible') ? 'err-setup'
-        : document.getElementById('bootstrap-overlay').classList.contains('visible') ? 'err-bootstrap'
-        : 'err-password';
-      setLoginErr(errTarget, data.error || 'Reset failed');
-      return;
-    }
-    setupStatus = data.status || null;
-    renderSetupStatus();
-    document.getElementById('login-password').value = '';
-    document.getElementById('login-totp').value = '';
-    showSetup();
-  } catch {
-    const errTarget = document.getElementById('setup-overlay').classList.contains('visible') ? 'err-setup'
-      : document.getElementById('bootstrap-overlay').classList.contains('visible') ? 'err-bootstrap'
-      : 'err-password';
-    setLoginErr(errTarget, 'Network error');
-  } finally {
-    setLoginBusy('btn-setup', false);
-    setLoginBusy('btn-password', false);
-    setLoginBusy('btn-bootstrap', false);
-  }
-}
-
-// ══════════════════════════════════════════════════════════
-// NAVIGATION
-// ══════════════════════════════════════════════════════════
-
-function switchPage(name) {
-  // Block non-admin from admin pages
-  if (name !== 'portal' && currentRole !== 'admin') return;
-
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('nav-' + name).classList.add('active');
-  document.getElementById('page-' + name).classList.add('active');
-
-  // Load data for admin pages
-  if (name === 'users') { refreshSetupStatus(); loadUsers(); }
-  if (name === 'ratelimits') loadRateLimits();
-}
-
-// ══════════════════════════════════════════════════════════
-// SSE / MONITOR (admin only)
-// ══════════════════════════════════════════════════════════
-
-function connectSSE() {
-  if (evtSource) evtSource.close();
-  evtSource = new EventSource(GW + '/api/admin/events');
-
-  evtSource.addEventListener('snapshot', (e) => {
-    try {
-      const snap = JSON.parse(e.data);
-      uptimeBase = snap.uptime_sec;
-      uptimeOffset = 0;
-      totalReq = snap.total;
-      totalErr = snap.errors;
-      svcData = snap.services || {};
-      renderServiceCards();
-      updateCounters();
-      if (snap.recent && snap.recent.length > 0) {
-        for (const evt of snap.recent) addLogRow(evt, false);
-      }
-      setConnected(true);
-    } catch (err) {
-      console.error('Snapshot parse error:', err);
-    }
-  });
-
-  evtSource.addEventListener('request', (e) => {
-    try {
-      const evt = JSON.parse(e.data);
-      totalReq++;
-      if (evt.status >= 400) totalErr++;
-      updateServiceFromEvent(evt);
-      updateCounters();
-      if (!paused) addLogRow(evt, true);
-    } catch (err) {
-      console.error('Event parse error:', err);
-    }
-  });
-
-  evtSource.onopen = () => setConnected(true);
-  evtSource.onerror = () => {
-    setConnected(false);
-    evtSource.close();
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connectSSE, 3000);
-  };
-}
-
-function setConnected(ok) {
-  const dot = document.getElementById('conn-dot');
-  const txt = document.getElementById('conn-text');
-  if (ok) {
-    dot.classList.add('live');
-    txt.textContent = 'Live';
-    txt.style.color = 'var(--green)';
-  } else {
-    dot.classList.remove('live');
-    txt.textContent = 'Disconnected';
-    txt.style.color = 'var(--red)';
-  }
-}
-
-// Uptime ticker
-setInterval(() => {
-  uptimeOffset++;
-  document.getElementById('uptime').textContent = fmtUptime(uptimeBase + uptimeOffset);
-}, 1000);
-
-function fmtUptime(sec) {
-  if (sec < 60) return sec + 's';
-  if (sec < 3600) return Math.floor(sec / 60) + 'm ' + (sec % 60) + 's';
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return h + 'h ' + m + 'm';
-}
-
-// ── Service cards ──
-function renderServiceCards() {
-  const container = document.getElementById('services-grid');
-  container.innerHTML = '';
-  for (const name of Object.keys(svcData).sort()) {
-    const s = svcData[name];
-    const card = document.createElement('div');
-    card.className = 'svc-card';
-    card.id = 'svc-' + name;
-    let dotClass = 'idle';
-    if (s.requests > 0) dotClass = (s.last_status >= 200 && s.last_status < 400) ? 'ok' : 'err';
-    const errRate = s.requests > 0 ? ((s.errors / s.requests) * 100).toFixed(1) : '0.0';
-    const avgLat = s.avg_latency_ms ? s.avg_latency_ms.toFixed(1) : '--';
-    card.innerHTML =
-      '<div class="svc-header"><span class="svc-name">' + name + '</span><div class="svc-dot ' + dotClass + '" id="svc-dot-' + name + '"></div></div>' +
-      '<div class="svc-backend">' + (s.backend || '') + '</div>' +
-      '<div class="svc-stats">' +
-        '<div><div class="svc-stat-val" id="svc-req-' + name + '">' + fmtNum(s.requests) + '</div><div class="svc-stat-label">Requests</div></div>' +
-        '<div><div class="svc-stat-val" id="svc-err-' + name + '" style="color:' + (s.errors > 0 ? 'var(--red)' : 'var(--text)') + '">' + fmtNum(s.errors) + '</div><div class="svc-stat-label">Errors</div></div>' +
-        '<div><div class="svc-stat-val ' + latencyClass(s.avg_latency_ms) + '" id="svc-lat-' + name + '">' + avgLat + '</div><div class="svc-stat-label">Avg ms</div></div>' +
-        '<div><div class="svc-stat-val" id="svc-rate-' + name + '" style="color:' + (parseFloat(errRate) > 5 ? 'var(--red)' : 'var(--green)') + '">' + errRate + '%</div><div class="svc-stat-label">Err rate</div></div>' +
-      '</div>';
-    container.appendChild(card);
-  }
-}
-
-function updateServiceFromEvent(evt) {
-  const svc = evt.service;
-  if (!svc) return;
-  if (!svcData[svc]) {
-    svcData[svc] = { name: svc, backend: '', requests: 0, errors: 0, avg_latency_ms: 0, last_status: 0, last_seen: 0 };
-    renderServiceCards();
-    return;
-  }
-  const s = svcData[svc];
-  const totalLat = s.avg_latency_ms * s.requests;
-  s.requests++;
-  if (evt.status >= 400) s.errors++;
-  s.avg_latency_ms = (totalLat + evt.latency_ms) / s.requests;
-  s.last_status = evt.status;
-  s.last_seen = evt.ts;
-
-  const reqEl = document.getElementById('svc-req-' + svc);
-  if (reqEl) {
-    reqEl.textContent = fmtNum(s.requests);
-    const errEl = document.getElementById('svc-err-' + svc);
-    errEl.textContent = fmtNum(s.errors);
-    errEl.style.color = s.errors > 0 ? 'var(--red)' : 'var(--text)';
-    document.getElementById('svc-lat-' + svc).textContent = s.avg_latency_ms.toFixed(1);
-    document.getElementById('svc-lat-' + svc).className = 'svc-stat-val ' + latencyClass(s.avg_latency_ms);
-    const errRate = ((s.errors / s.requests) * 100).toFixed(1);
-    const rateEl = document.getElementById('svc-rate-' + svc);
-    rateEl.textContent = errRate + '%';
-    rateEl.style.color = parseFloat(errRate) > 5 ? 'var(--red)' : 'var(--green)';
-    document.getElementById('svc-dot-' + svc).className = 'svc-dot ' + ((evt.status >= 200 && evt.status < 400) ? 'ok' : 'err');
-  }
-  const card = document.getElementById('svc-' + svc);
-  if (card) { card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 400); }
-}
-
-function updateCounters() {
-  document.getElementById('total-req').textContent = fmtNum(totalReq);
-  document.getElementById('total-err').textContent = fmtNum(totalErr);
-}
-
-// ── Request log ──
-function addLogRow(evt, animate) {
-  const tbody = document.getElementById('log-table');
-  const empty = document.getElementById('empty-log');
-  if (empty) empty.style.display = 'none';
-  const tr = document.createElement('tr');
-  if (animate) tr.className = 'new-row';
-  const time = new Date(evt.ts).toLocaleTimeString('en-GB', { hour12: false });
-  const methodCls = 'method method-' + evt.method.toLowerCase();
-  const statusCls = 'status ' + statusClass(evt.status);
-  const latCls = latencyClass(evt.latency_ms);
-  tr.innerHTML =
-    '<td style="color:var(--text-dim)">' + time + '</td>' +
-    '<td><span class="' + methodCls + '">' + evt.method + '</span></td>' +
-    '<td>' + escHtml(evt.path) + '</td>' +
-    '<td><span class="' + statusCls + '">' + evt.status + '</span></td>' +
-    '<td class="' + latCls + '">' + evt.latency_ms.toFixed(1) + 'ms</td>' +
-    '<td style="color:var(--text-dim)">' + evt.client_ip + '</td>' +
-    '<td style="color:var(--purple)">' + (evt.user || '-') + '</td>';
-  if (tbody.firstChild) tbody.insertBefore(tr, tbody.firstChild);
-  else tbody.appendChild(tr);
-  while (tbody.children.length > MAX_LOG_ROWS) tbody.removeChild(tbody.lastChild);
-  if (autoScroll && animate) document.getElementById('log-body').scrollTop = 0;
-}
-
-function clearLog() {
-  document.getElementById('log-table').innerHTML = '';
-  document.getElementById('empty-log').style.display = 'block';
-}
-function togglePause() {
-  paused = !paused;
-  const btn = document.getElementById('btn-pause');
-  btn.textContent = paused ? 'Resume' : 'Pause';
-  if (paused) btn.classList.add('active'); else btn.classList.remove('active');
-}
-document.getElementById('log-body').addEventListener('scroll', function() { autoScroll = this.scrollTop < 10; });
-
-// ── Test console ──
-async function testEndpoint(path) {
-  const result = document.getElementById('test-result');
-  result.className = 'test-result show';
-  result.textContent = 'Testing ' + path + '...';
-  result.style.color = 'var(--text-dim)';
-  result.style.background = 'var(--bg-deep)';
-  result.style.border = '1px solid var(--border)';
-  try {
-    const resp = await fetch(GW + path);
-    let body;
-    const ct = resp.headers.get('content-type') || '';
-    if (ct.includes('json')) body = JSON.stringify(await resp.json(), null, 2);
-    else { body = await resp.text(); if (body.length > 500) body = body.substring(0, 500) + '...'; }
-    result.className = 'test-result show ' + (resp.ok ? 'ok' : 'err');
-    result.textContent = resp.status + ' ' + (resp.ok ? 'OK' : resp.statusText) + '\n' + body;
-  } catch (err) { result.className = 'test-result show err'; result.textContent = 'Network error: ' + err.message; }
-}
-
-// ══════════════════════════════════════════════════════════
-// USERS (admin only)
-// ══════════════════════════════════════════════════════════
-
-function setUsersNotice(msg, type) {
-  const el = document.getElementById('users-notice');
-  el.textContent = msg;
-  el.className = 'notice visible ' + type;
-  if (msg) setTimeout(() => el.classList.remove('visible'), 4000);
-}
-
-async function loadUsers() {
-  try {
-    const resp = await fetch(GW + '/api/admin/users');
-    if (!resp.ok) return;
-    const data = await resp.json();
-    serviceCatalog = Array.isArray(data.service_catalog) ? data.service_catalog : serviceCatalog;
-    renderCreateServiceChecks();
-    renderUsers(data.users || []);
-  } catch {}
-}
-
-function renderUsers(users) {
-  const tbody = document.getElementById('users-tbody');
-  tbody.innerHTML = '';
-  if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim);padding:16px;text-align:center">No users found</td></tr>';
-    return;
-  }
-  for (const u of users) {
-    const tr = document.createElement('tr');
-    const created = u.created_at ? new Date(u.created_at).toLocaleDateString() : '-';
-    const allowed = Array.isArray(u.allowed_services) ? u.allowed_services : [];
-    const isAdmin = u.role === 'admin';
-    const configured = !!u.service_access_configured;
-    tr.innerHTML =
-      '<td>' + escHtml(u.username) + '</td>' +
-      '<td><span class="role-pill role-' + u.role + '">' + u.role + '</span></td>' +
-      '<td class="access-cell">' + renderServiceControls(u.username, allowed, isAdmin, configured) + '</td>' +
-      '<td style="color:var(--text-dim)">' + created + '</td>' +
-      '<td><div class="actions">' +
-        (isAdmin ? '' : '<button class="btn-primary" onclick="saveUserAccess(\'' + escAttr(u.username) + '\')" style="padding:4px 10px">Save Access</button>') +
-        '<button class="btn-ghost" onclick="resetTOTP(\'' + escAttr(u.username) + '\')">Reset TOTP</button>' +
-        '<button class="btn-danger" onclick="deleteUser(\'' + escAttr(u.username) + '\')">Delete</button>' +
-      '</div></td>';
-    tbody.appendChild(tr);
-  }
-}
-
-function renderCreateServiceChecks() {
-  const wrap = document.getElementById('create-service-checks');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  for (const service of serviceCatalog) {
-    const label = document.createElement('label');
-    label.className = 'service-check';
-    label.innerHTML = '<input type="checkbox" value="' + escAttr(service) + '" checked> <span>' + escHtml(service) + '</span>';
-    wrap.appendChild(label);
-  }
-  updateCreateServiceHint();
-}
-
-function renderServiceControls(username, allowed, isAdmin, configured) {
-  if (isAdmin) return '<span class="service-muted">Full access</span>';
-  const selected = new Set(configured ? allowed : serviceCatalog);
-  return '<div class="service-checks">' + serviceCatalog.map(service =>
-    '<label class="service-check"><input type="checkbox" data-service-check="1" data-user="' + escAttr(username) + '" value="' + escAttr(service) + '"' +
-    (selected.has(service) ? ' checked' : '') + '> <span>' + escHtml(service) + '</span></label>'
-  ).join('') + '</div>';
-}
-
-function toggleCreateForm() {
-  const form = document.getElementById('create-form');
-  form.classList.toggle('visible');
-  if (form.classList.contains('visible')) {
-    document.getElementById('new-username').focus();
-    updateCreateServiceHint();
-  }
-}
-
-async function createUser() {
-  const username = document.getElementById('new-username').value.trim();
-  const password = document.getElementById('new-password').value;
-  const role = document.getElementById('new-role').value;
-  const allowedServices = getCheckedValues(document.querySelectorAll('#create-service-checks input[type="checkbox"]'));
-  if (!username || !password) { setUsersNotice('Username and password required', 'err'); return; }
-  try {
-    const resp = await fetch(GW + '/api/admin/users', {
-      method: 'POST', headers: csrfHeaders({'Content-Type': 'application/json'}),
-      body: JSON.stringify({username, password, role, allowed_services: role === 'admin' ? serviceCatalog : allowedServices}),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { setUsersNotice(data.error || 'Failed', 'err'); return; }
-    document.getElementById('new-username').value = '';
-    document.getElementById('new-password').value = '';
-    document.querySelectorAll('#create-service-checks input[type="checkbox"]').forEach(cb => cb.checked = true);
-    updateCreateServiceHint();
-    document.getElementById('create-form').classList.remove('visible');
-    setUsersNotice('User "' + username + '" created', 'ok');
-    loadUsers();
-    if (data.otpauth) showQR(username, data.otpauth);
-  } catch { setUsersNotice('Network error', 'err'); }
-}
-
-async function saveUserAccess(username) {
-  const boxes = Array.from(document.querySelectorAll('input[data-service-check="1"]')).filter(box => box.dataset.user === username);
-  const allowedServices = getCheckedValues(boxes);
-  try {
-    const resp = await fetch(GW + '/api/admin/users/' + encodeURIComponent(username) + '/access', {
-      method: 'PUT',
-      headers: csrfHeaders({'Content-Type': 'application/json'}),
-      body: JSON.stringify({allowed_services: allowedServices}),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { setUsersNotice(data.error || 'Failed', 'err'); return; }
-    setUsersNotice('API access updated for "' + username + '"', 'ok');
-    if (username === currentUser) {
-      availableServices = allowedServices;
-      renderPortalServices();
-    }
-  } catch { setUsersNotice('Network error', 'err'); }
-}
-
-async function deleteUser(username) {
-  if (!confirm('Delete user "' + username + '"? This cannot be undone.')) return;
-  try {
-    const resp = await fetch(GW + '/api/admin/users/' + encodeURIComponent(username), {method: 'DELETE', headers: csrfHeaders()});
-    const data = await resp.json();
-    if (!resp.ok) { setUsersNotice(data.error || 'Failed', 'err'); return; }
-    setUsersNotice('User "' + username + '" deleted', 'ok');
-    loadUsers();
-  } catch { setUsersNotice('Network error', 'err'); }
-}
-
-async function resetTOTP(username) {
-  if (!confirm('Reset TOTP for "' + username + '"? They will need to re-scan a new QR code.')) return;
-  try {
-    const resp = await fetch(GW + '/api/admin/users/' + encodeURIComponent(username) + '/reset', {method: 'POST', headers: csrfHeaders()});
-    const data = await resp.json();
-    if (!resp.ok) { setUsersNotice(data.error || 'Failed', 'err'); return; }
-    setUsersNotice('TOTP rotated for "' + username + '"', 'ok');
-    if (data.otpauth) showQR(username, data.otpauth);
-  } catch { setUsersNotice('Network error', 'err'); }
-}
-
-// ── QR code ──
-function showQR(username, otpauth) {
-  document.getElementById('qr-username-msg').textContent = username + ' — scan with an authenticator app.';
-  document.getElementById('qr-uri').textContent = otpauth;
-  const canvas = document.getElementById('qr-canvas');
-  canvas.innerHTML = '';
-  if (typeof QRCode !== 'undefined') {
-    new QRCode(canvas, {text: otpauth, width: 200, height: 200, colorDark: '#c0caf5', colorLight: '#16161e'});
-  }
-  document.getElementById('qr-modal-bg').classList.add('visible');
-}
-function closeQR() { document.getElementById('qr-modal-bg').classList.remove('visible'); }
-
-// ══════════════════════════════════════════════════════════
-// UPGRADE STORAGE (admin only)
-// ══════════════════════════════════════════════════════════
-
-let upgradeVaultType = 'file';
-let upgradeServiceSecretMode = 'file';
-
-function showUpgradeModal() {
-  upgradeVaultType = 'file';
-  upgradeServiceSecretMode = 'file';
-  document.querySelectorAll('[id^="up-vchip-"]').forEach(b => b.classList.remove('active'));
-  document.getElementById('up-vchip-file').classList.add('active');
-  document.querySelectorAll('[id^="up-sschip-"]').forEach(b => b.classList.remove('active'));
-  document.getElementById('up-sschip-file').classList.add('active');
-  document.getElementById('up-vault-hashicorp-row').style.display = 'none';
-  document.getElementById('up-master-row').style.display = 'none';
-  setLoginErr('err-upgrade', '');
-  document.getElementById('upgrade-modal-bg').classList.add('visible');
-}
-
-function closeUpgradeModal() {
-  document.getElementById('upgrade-modal-bg').classList.remove('visible');
-}
-
-function selectUpgradeVault(type) {
-  upgradeVaultType = type;
-  document.querySelectorAll('[id^="up-vchip-"]').forEach(b => b.classList.remove('active'));
-  const chip = document.getElementById('up-vchip-' + type);
-  if (chip) chip.classList.add('active');
-  document.getElementById('up-vault-hashicorp-row').style.display = type === 'hashicorp' ? 'block' : 'none';
-}
-
-function selectUpgradeServiceSecrets(mode) {
-  upgradeServiceSecretMode = mode;
-  document.querySelectorAll('[id^="up-sschip-"]').forEach(b => b.classList.remove('active'));
-  const chip = document.getElementById('up-sschip-' + mode);
-  if (chip) chip.classList.add('active');
-  document.getElementById('up-master-row').style.display = mode === 'encrypted_file' ? 'block' : 'none';
-}
-
-async function submitUpgrade() {
-  const masterPw = document.getElementById('up-master-password').value;
-  if (upgradeServiceSecretMode === 'encrypted_file' && !masterPw) {
-    setLoginErr('err-upgrade', 'Master password required for encrypted file mode');
-    return;
-  }
-
-  const payload = {
-    user_vault: {
-      type: upgradeVaultType,
-      address: (document.getElementById('up-vault-address') || {}).value || '',
-      engine:  (document.getElementById('up-vault-engine')  || {}).value || '',
-    },
-    service_secrets: { mode: upgradeServiceSecretMode },
-    master_password: masterPw,
-  };
-
-  setLoginBusy('btn-upgrade', true); setLoginErr('err-upgrade', '');
-  try {
-    const resp = await fetch(GW + '/api/admin/settings/storage', {
-      method: 'POST',
-      headers: csrfHeaders({'Content-Type': 'application/json'}),
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { setLoginErr('err-upgrade', data.error || 'Upgrade failed'); return; }
-    setupStatus = data.status || setupStatus;
-    renderSetupStatus();
-    closeUpgradeModal();
-    setUsersNotice('Storage upgraded to persistent mode', 'ok');
-  } catch { setLoginErr('err-upgrade', 'Network error'); }
-  finally { setLoginBusy('btn-upgrade', false); }
-}
-
-// ══════════════════════════════════════════════════════════
-// RATE LIMITS (admin only)
-// ══════════════════════════════════════════════════════════
-
-function setRLNotice(msg, type) {
-  const el = document.getElementById('rl-notice');
-  el.textContent = msg;
-  el.className = 'notice visible ' + type;
-  if (msg) setTimeout(() => el.classList.remove('visible'), 4000);
-}
-
-async function loadRateLimits() {
-  try {
-    const resp = await fetch(GW + '/api/admin/settings/ratelimits');
-    if (!resp.ok) return;
-    const data = await resp.json();
-    document.getElementById('rl-default-rpm').value = data.default?.requests_per_minute ?? 60;
-    document.getElementById('rl-default-burst').value = data.default?.burst ?? 10;
-    const list = document.getElementById('rl-users-list');
-    list.innerHTML = '';
-    for (const [user, rule] of Object.entries(data.users || {})) {
-      addRLUserRow(user, rule.requests_per_minute, rule.burst);
-    }
-  } catch {}
-}
-
-function addRLUserRow(username, rpm, burst) {
-  username = username || '';
-  rpm = rpm ?? 60;
-  burst = burst ?? 10;
-  const list = document.getElementById('rl-users-list');
-  const div = document.createElement('div');
-  div.className = 'rl-user-row';
-  div.innerHTML =
-    '<input class="form-input" placeholder="username" value="' + escAttr(username) + '" style="width:110px;min-width:0">' +
-    '<input class="rl-input" type="number" min="0" value="' + rpm + '" placeholder="rpm">' +
-    '<span class="rl-unit">rpm</span>' +
-    '<input class="rl-input" type="number" min="0" value="' + burst + '" placeholder="burst">' +
-    '<span class="rl-unit">burst</span>' +
-    '<button class="btn-danger" onclick="this.parentElement.remove()" style="padding:3px 8px">x</button>';
-  list.appendChild(div);
-}
-
-async function saveRateLimits() {
-  const settings = {
-    default: {
-      requests_per_minute: parseInt(document.getElementById('rl-default-rpm').value) || 60,
-      burst: parseInt(document.getElementById('rl-default-burst').value) || 10,
-    },
-    users: {},
-  };
-  for (const row of document.getElementById('rl-users-list').children) {
-    const inputs = row.querySelectorAll('input');
-    const uname = inputs[0].value.trim();
-    if (!uname) continue;
-    settings.users[uname] = {
-      requests_per_minute: parseInt(inputs[1].value) || 60,
-      burst: parseInt(inputs[2].value) || 10,
-    };
-  }
-  try {
-    const resp = await fetch(GW + '/api/admin/settings/ratelimits', {
-      method: 'POST', headers: csrfHeaders({'Content-Type': 'application/json'}),
-      body: JSON.stringify(settings),
-    });
-    if (!resp.ok) { setRLNotice('Failed to save', 'err'); return; }
-    setRLNotice('Rate limits saved', 'ok');
-  } catch { setRLNotice('Network error', 'err'); }
-}
-
-// ══════════════════════════════════════════════════════════
-// HELPERS
-// ══════════════════════════════════════════════════════════
-
-function statusClass(s) {
-  if (s >= 500) return 's5xx';
-  if (s >= 400) return 's4xx';
-  if (s >= 300) return 's3xx';
-  return 's2xx';
-}
-function latencyClass(ms) {
-  if (!ms || ms < 50) return 'latency-fast';
-  if (ms < 200) return 'latency-mid';
-  return 'latency-slow';
-}
-function fmtNum(n) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-  return String(n);
-}
-function escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-function escAttr(s) {
-  return s.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-}
-function getCheckedValues(nodes) {
-  return Array.from(nodes).filter(n => n.checked).map(n => n.value);
-}
-function updateCreateServiceHint() {
-  const hint = document.getElementById('create-service-hint');
-  const role = document.getElementById('new-role')?.value;
-  if (!hint) return;
-  if (role === 'admin') {
-    hint.textContent = 'Admin accounts always have full access.';
-    return;
-  }
-  const selected = getCheckedValues(document.querySelectorAll('#create-service-checks input[type="checkbox"]'));
-  hint.textContent = selected.length ? 'Selected APIs will be available to this user.' : 'No APIs selected. This user will be blocked from all proxied APIs until access is assigned.';
-}
-
-// ── Enter key bindings ──
-document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') submitPassword(); });
-document.getElementById('login-totp').addEventListener('keydown', e => { if (e.key === 'Enter') submitTOTP(); });
-document.getElementById('login-username').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
-document.getElementById('bootstrap-username').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('bootstrap-password').focus(); });
-document.getElementById('bootstrap-password').addEventListener('keydown', e => { if (e.key === 'Enter') submitBootstrap(); });
-document.getElementById('new-role').addEventListener('change', updateCreateServiceHint);
-document.addEventListener('change', function(e) {
-  if (e.target && e.target.matches('#create-service-checks input[type="checkbox"]')) updateCreateServiceHint();
-});
-
-// ── Start ──
-init();
-  </script>
+  <script src="/static/vendor/qrcode.min.js"></script>
+  <script src="/static/js/app-core.js"></script>
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/portal-console.js"></script>
+  <script src="/static/js/setup.js"></script>
+  <script src="/static/js/monitor.js"></script>
+  <script src="/static/js/admin-services.js"></script>
+  <script src="/static/js/admin-users.js"></script>
+  <script src="/static/js/admin-tokens.js"></script>
+  <script src="/static/js/admin-ratelimits.js"></script>
+  <script src="/static/js/navigation.js"></script>
+  <script src="/static/js/bootstrap.js"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -45,6 +46,33 @@ var (
 	serviceSecretConfig = ServiceSecretConfig{Mode: ServiceSecretMemory}
 	serviceSecrets      = map[string]string{}
 )
+
+func NormalizeTemporaryServiceSecretConfig(cfg ServiceSecretConfig) ServiceSecretConfig {
+	cfg.Mode = ServiceSecretMemory
+	cfg.FilePath = ""
+	cfg.Locked = false
+	cfg.MasterHint = ""
+	return cfg
+}
+
+func NormalizePersistentServiceSecretConfig(cfg ServiceSecretConfig) ServiceSecretConfig {
+	cfg.Locked = false
+	cfg.MasterHint = ""
+
+	switch cfg.Mode {
+	case ServiceSecretEncryptedFile:
+		if strings.TrimSpace(cfg.FilePath) == "" {
+			cfg.FilePath = "service-secrets.enc.json"
+		}
+	default:
+		cfg.Mode = ServiceSecretFile
+		if strings.TrimSpace(cfg.FilePath) == "" || cfg.FilePath == "service-secrets.enc.json" {
+			cfg.FilePath = "service-secrets.json"
+		}
+	}
+
+	return cfg
+}
 
 func ConfigureServiceSecrets(cfg ServiceSecretConfig, initial map[string]string, masterPassword string) error {
 	serviceSecretMu.Lock()

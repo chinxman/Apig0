@@ -9,14 +9,16 @@
 package main
 
 import (
-	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"apig0/auth"
+	"apig0/cli"
 	"apig0/config"
 	"apig0/middleware"
 	"apig0/proxy"
@@ -25,10 +27,16 @@ import (
 )
 
 func main() {
+	if cli.ShouldSilenceBootstrapLogs(os.Args[1:]) {
+		log.SetOutput(io.Discard)
+	}
 	config.LoadSetupBootstrap()
 	config.LoadAppConfig()
 	if err := config.ReloadRuntime(nil, ""); err != nil {
 		log.Printf("[setup] runtime init warning: %v", err)
+	}
+	if handled, exitCode := cli.Run(os.Args[1:]); handled {
+		os.Exit(exitCode)
 	}
 
 	if users := strings.Split(strings.TrimSpace(os.Getenv("APIG0_USERS")), ","); len(users) > 0 {
@@ -52,6 +60,7 @@ func main() {
 	// Auth is enforced per-route: SessionMiddleware on proxy + admin endpoints.
 	r.Use(middleware.Cors())
 	r.Use(mon.Middleware())
+	r.Static("/static", "./static")
 
 	// Unified WebUI — login overlay gates access, role determines visible panels.
 	// Admin data still requires AdminMiddleware on /api/admin/*.
@@ -68,7 +77,6 @@ func main() {
 	// Auth endpoints — no session required, but rate-limited to prevent brute force
 	// CSRF exempt: these are pre-authentication or use non-cookie credentials.
 	r.GET("/api/setup/status", auth.SetupStatusHandler)
-	r.POST("/api/setup/reset", auth.ResetSetupHandler)
 	r.POST("/api/setup/complete", auth.CompleteSetupHandler)
 	r.POST("/api/setup/bootstrap-admin", middleware.RateLimit(), auth.BootstrapAdminHandler)
 	r.POST("/auth/login", middleware.RateLimit(), auth.LoginHandler)
@@ -86,30 +94,78 @@ func main() {
 	admin.DELETE("/users/:user", auth.DeleteUserHandler)
 	admin.POST("/users/:user/reset", auth.ResetTOTPHandler)
 	admin.PUT("/users/:user/access", auth.UpdateUserAccessHandler)
+	admin.GET("/users/:user/policies", auth.GetUserPoliciesHandler)
+	admin.PUT("/users/:user/policies", auth.UpdateUserPoliciesHandler)
+	admin.GET("/tokens", auth.ListTokensHandler)
+	admin.POST("/tokens", auth.CreateTokenHandler)
+	admin.POST("/tokens/:id/revoke", auth.RevokeTokenHandler)
+	admin.GET("/audit", auth.ListAuditHandler)
+	admin.GET("/services", auth.ListServicesHandler)
+	admin.POST("/services", auth.CreateServiceHandler)
+	admin.PUT("/services/:name", auth.UpdateServiceHandler)
+	admin.DELETE("/services/:name", auth.DeleteServiceHandler)
+	admin.POST("/services/:name/test-auth", auth.TestServiceAuthHandler)
 	admin.GET("/settings/ratelimits", auth.GetRateLimitsHandler)
 	admin.POST("/settings/ratelimits", auth.SaveRateLimitsHandler)
 	admin.POST("/settings/storage", auth.UpgradeStorageHandler)
+	admin.POST("/setup/reset", auth.ResetSetupHandler)
+	r.GET("/metrics", middleware.PrometheusHandler(mon))
 
 	// User info endpoint — session + rate limit required
 	r.GET("/api/user/info", auth.SessionMiddleware(), middleware.RateLimit(), func(c *gin.Context) {
 		user, _ := c.Get("session_user")
-		role := config.GetUserStore().GetRole(user.(string))
+		username := user.(string)
+		role := config.GetUserStore().GetRole(username)
 		services := config.ListServiceNames()
 		allowed := services
 		if role != "admin" {
-			explicit := config.GetUserStore().GetAllowedServices(user.(string))
-			if config.GetUserStore().HasConfiguredServiceAccess(user.(string)) {
+			explicit := config.GetUserStore().GetAllowedServices(username)
+			if config.GetUserStore().HasConfiguredServiceAccess(username) {
 				allowed = explicit
 			}
 		}
+		if scoped, ok := c.Get("api_token_allowed_services"); ok {
+			if tokenAllowed, ok := scoped.([]string); ok && len(tokenAllowed) > 0 {
+				allowed = tokenAllowed
+			}
+		}
+		assignedToken, hasAssignedToken := config.GetLatestActiveTokenForUser(username)
+		assignedBackendLabel := ""
+		if hasAssignedToken && assignedToken.OpenAIService != "" {
+			if backend, ok := config.GetServiceConfig(assignedToken.OpenAIService); ok {
+				switch {
+				case strings.TrimSpace(backend.Provider) != "" && backend.Provider != backend.Name:
+					assignedBackendLabel = backend.Provider + " • " + backend.Name
+				case strings.TrimSpace(backend.Provider) != "":
+					assignedBackendLabel = backend.Provider
+				default:
+					assignedBackendLabel = backend.Name
+				}
+			}
+		}
 		c.JSON(200, gin.H{
-			"user":                      user,
-			"role":                      role,
-			"service_access_configured": role == "admin" || config.GetUserStore().HasConfiguredServiceAccess(user.(string)),
-			"available_services":        allowed,
-			"service_catalog":           services,
+			"user":                       user,
+			"role":                       role,
+			"auth_source":                c.GetString("auth_source"),
+			"service_access_configured":  role == "admin" || config.GetUserStore().HasConfiguredServiceAccess(username),
+			"available_services":         allowed,
+			"service_catalog":            services,
+			"node_mode":                  config.GetRuntimeStatus().NodeMode,
+			"has_assigned_token":         hasAssignedToken,
+			"assigned_token_type":        assignedToken.KeyType,
+			"assigned_token_prefix":      assignedToken.TokenPrefix,
+			"assigned_openai_service":    assignedToken.OpenAIService,
+			"assigned_backend_label":     assignedBackendLabel,
+			"assigned_allowed_models":    assignedToken.AllowedModels,
+			"assigned_allowed_providers": assignedToken.AllowedProviders,
 		})
 	})
+	r.GET("/api/user/pending-keys", auth.SessionMiddleware(), middleware.RateLimit(), auth.ListPendingTokenDeliveriesHandler)
+	r.POST("/api/user/pending-keys/:id/claim", auth.SessionMiddleware(), middleware.CSRF(), middleware.RateLimit(), auth.ClaimPendingTokenDeliveryHandler)
+
+	// OpenAI-compatible AI proxy — token auth + rate limit, no CSRF so SDKs can call it directly.
+	r.Any("/openai/v1", auth.SessionMiddleware(), middleware.RateLimit(), proxy.NewOpenAICompatibleProxy())
+	r.Any("/openai/v1/*openaiPath", auth.SessionMiddleware(), middleware.RateLimit(), proxy.NewOpenAICompatibleProxy())
 
 	// Health-check
 	r.GET("/healthz", func(c *gin.Context) {
@@ -125,25 +181,107 @@ func main() {
 		}
 		parts := strings.SplitN(path, "/", 2)
 		svc := parts[0]
+		routePath := "/"
+		if len(parts) == 2 && strings.TrimSpace(parts[1]) != "" {
+			routePath = "/" + parts[1]
+		}
 
 		if serviceCfg, ok := config.LookupService(svc); ok {
 			userVal, _ := c.Get("session_user")
 			username, _ := userVal.(string)
-			if username == "" || !config.GetUserStore().CanAccessService(username, svc) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "service access denied"})
+			authSource := c.GetString("auth_source")
+			if username == "" {
+				config.RecordAuditEvent(config.AuditEvent{
+					User:       username,
+					AuthSource: authSource,
+					Service:    svc,
+					Method:     c.Request.Method,
+					Path:       routePath,
+					Decision:   "deny",
+					Reason:     "authentication required",
+					ClientIP:   c.ClientIP(),
+					Status:     http.StatusUnauthorized,
+					Upstream:   serviceCfg.BaseURL,
+				})
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+				return
+			}
+			if scoped, ok := c.Get("api_token_allowed_services"); ok {
+				if allowed, ok := scoped.([]string); ok && len(allowed) > 0 && !slices.Contains(allowed, svc) {
+					config.RecordAuditEvent(config.AuditEvent{
+						User:       username,
+						AuthSource: authSource,
+						Service:    svc,
+						Method:     c.Request.Method,
+						Path:       routePath,
+						Decision:   "deny",
+						Reason:     "token scope denied",
+						PolicyID:   "",
+						TokenID:    c.GetString("api_token_id"),
+						ClientIP:   c.ClientIP(),
+						Status:     http.StatusForbidden,
+						Upstream:   serviceCfg.BaseURL,
+					})
+					c.JSON(http.StatusForbidden, gin.H{"error": "token scope denied"})
+					return
+				}
+			}
+			decision := config.EvaluateRouteAccess(username, svc, c.Request.Method, routePath, authSource)
+			if !decision.Allowed {
+				config.RecordAuditEvent(config.AuditEvent{
+					User:       username,
+					AuthSource: authSource,
+					Service:    svc,
+					Method:     c.Request.Method,
+					Path:       routePath,
+					Decision:   "deny",
+					Reason:     decision.Reason,
+					PolicyID:   decision.PolicyID,
+					TokenID:    c.GetString("api_token_id"),
+					ClientIP:   c.ClientIP(),
+					Status:     http.StatusForbidden,
+					Upstream:   serviceCfg.BaseURL,
+				})
+				c.JSON(http.StatusForbidden, gin.H{"error": decision.Reason})
 				return
 			}
 			mon.RegisterService(serviceCfg.Name, serviceCfg.BaseURL)
 			proxy.NewReverseProxy(serviceCfg)(c)
+			config.RecordAuditEvent(config.AuditEvent{
+				User:       username,
+				AuthSource: authSource,
+				Service:    svc,
+				Method:     c.Request.Method,
+				Path:       routePath,
+				Decision:   "allow",
+				Reason:     decision.Reason,
+				PolicyID:   decision.PolicyID,
+				TokenID:    c.GetString("api_token_id"),
+				ClientIP:   c.ClientIP(),
+				Status:     c.Writer.Status(),
+				Upstream:   serviceCfg.BaseURL,
+			})
 			return
 		}
 
+		config.RecordAuditEvent(config.AuditEvent{
+			User:       c.GetString("session_user"),
+			AuthSource: c.GetString("auth_source"),
+			Service:    svc,
+			Method:     c.Request.Method,
+			Path:       routePath,
+			Decision:   "deny",
+			Reason:     "service not found",
+			TokenID:    c.GetString("api_token_id"),
+			ClientIP:   c.ClientIP(),
+			Status:     http.StatusNotFound,
+		})
 		c.JSON(404, gin.H{"error": "service not found"})
 	})
 
 	port := os.Getenv("APIG0_PORT")
 	if port == "" {
-		port = "8080"
+		port = "8989"
 	}
 
 	tlsCfg := config.LoadTLSConfig()
@@ -154,22 +292,7 @@ func main() {
 
 		httpsAddr := ":" + port
 		webUIHost := advertisedHost()
-		log.Printf("Apig0 gateway running on %s (HTTPS)", httpsAddr)
-		log.Printf("WebUI: https://%s:%s/", webUIHost, port)
-		log.Printf("TLS cert: %s", tlsCfg.CertFile)
-
-		// Optional: redirect HTTP → HTTPS on port 8080 if HTTPS is on a different port
-		if port != "8080" {
-			go func() {
-				redirect := http.NewServeMux()
-				redirect.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-					target := fmt.Sprintf("https://%s:%s%s", r.Host, port, r.URL.RequestURI())
-					http.Redirect(w, r, target, http.StatusMovedPermanently)
-				})
-				log.Println("HTTP redirect on :8080 → HTTPS")
-				http.ListenAndServe(":8080", redirect)
-			}()
-		}
+		logStartupSummary("https", webUIHost, port, tlsCfg)
 
 		if err := r.RunTLS(httpsAddr, tlsCfg.CertFile, tlsCfg.KeyFile); err != nil {
 			log.Fatalf("[tls] failed to start: %v", err)
@@ -177,9 +300,21 @@ func main() {
 	} else {
 		addr := ":" + port
 		webUIHost := advertisedHost()
-		log.Printf("Apig0 gateway running on %s (HTTP)", addr)
-		log.Printf("WebUI: http://%s:%s/", webUIHost, port)
+		_ = addr
+		logStartupSummary("http", webUIHost, port, tlsCfg)
 		r.Run(addr)
+	}
+}
+
+func logStartupSummary(scheme, host, port string, tlsCfg config.TLSConfig) {
+	status := config.GetRuntimeStatus()
+	log.Printf("[startup] Apig0 ready: %s://%s:%s/ (setup=%s, node=%s)", scheme, host, port, status.SetupMode, status.NodeMode)
+	if scheme == "https" && tlsCfg.Mode == config.TLSAuto {
+		if status.SetupMode == string(config.SetupModeTemporary) {
+			log.Printf("[startup] TLS: temporary auto-cert active")
+			return
+		}
+		log.Printf("[startup] TLS: auto-cert active (%s)", tlsCfg.CertFile)
 	}
 }
 

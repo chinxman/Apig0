@@ -25,7 +25,7 @@ func TestResetSetupStateRemovesPersistentFilesAndReturnsToSetup(t *testing.T) {
 
 	cfg := SetupConfig{
 		Mode:           SetupModePersistent,
-		Port:           "8080",
+		Port:           "8989",
 		UsersPath:      filepath.Join(tmp, "users.json"),
 		ServicesPath:   filepath.Join(tmp, "services.json"),
 		RateLimitsPath: filepath.Join(tmp, "ratelimits.json"),

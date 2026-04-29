@@ -41,7 +41,7 @@ func TestRuntimeStatusReportsTemporaryEnvMode(t *testing.T) {
 
 	ActivateTemporarySetup(SetupConfig{
 		Mode:           SetupModeTemporary,
-		Port:           "8080",
+		Port:           "8989",
 		UserVault:      UserVaultSettings{Type: "env"},
 		ServiceSecrets: ServiceSecretConfig{Mode: ServiceSecretMemory},
 	})

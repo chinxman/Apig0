@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,13 +149,24 @@ func (s *UserStore) Delete(username string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.cache[username]; !exists {
+	u, exists := s.cache[username]
+	if !exists {
 		return fmt.Errorf("user %q not found", username)
 	}
-	if err := s.remove(username); err != nil {
+
+	if s.useVault {
+		if err := s.remove(username); err != nil {
+			return err
+		}
+		delete(s.cache, username)
+		return nil
+	}
+
+	delete(s.cache, username)
+	if err := s.saveToFile(); err != nil {
+		s.cache[username] = u
 		return err
 	}
-	delete(s.cache, username)
 	return nil
 }
 
@@ -165,7 +178,37 @@ func (s *UserStore) List() []User {
 	for _, u := range s.cache {
 		users = append(users, *u)
 	}
+	sort.Slice(users, func(i, j int) bool {
+		if users[i].CreatedAt.Equal(users[j].CreatedAt) {
+			return users[i].Username < users[j].Username
+		}
+		return users[i].CreatedAt.Before(users[j].CreatedAt)
+	})
 	return users
+}
+
+func (s *UserStore) IsProtectedAdmin(username string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return false
+	}
+
+	var protected *User
+	for _, user := range s.cache {
+		if user.Role != "admin" {
+			continue
+		}
+		if protected == nil ||
+			user.CreatedAt.Before(protected.CreatedAt) ||
+			(user.CreatedAt.Equal(protected.CreatedAt) && user.Username < protected.Username) {
+			protected = user
+		}
+	}
+
+	return protected != nil && protected.Username == username
 }
 
 func (s *UserStore) ValidatePassword(username, password string) bool {
@@ -261,11 +304,67 @@ func (s *UserStore) ClearServiceAccessRestrictions(username string) error {
 	return s.persist(u)
 }
 
+func (s *UserStore) RemoveAllowedServiceEverywhere(service string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	service = NormalizeAllowedServiceName(service)
+	if service == "" {
+		return nil
+	}
+
+	changedUsers := make([]*User, 0)
+	for _, u := range s.cache {
+		if u.Role == "admin" || !u.ServiceAccessConfigured || len(u.AllowedServices) == 0 {
+			continue
+		}
+
+		next := make([]string, 0, len(u.AllowedServices))
+		changed := false
+		for _, allowed := range u.AllowedServices {
+			if NormalizeAllowedServiceName(allowed) == service {
+				changed = true
+				continue
+			}
+			next = append(next, allowed)
+		}
+		if !changed {
+			continue
+		}
+
+		u.AllowedServices = next
+		changedUsers = append(changedUsers, u)
+	}
+
+	if len(changedUsers) == 0 {
+		return nil
+	}
+
+	if s.useVault {
+		for _, u := range changedUsers {
+			raw, err := json.Marshal(u)
+			if err != nil {
+				return err
+			}
+			if err := activeVault.StoreSecret(userVaultPath, u.Username, string(raw)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return s.saveToFile()
+}
+
 func (s *UserStore) Exists(username string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	_, ok := s.cache[username]
 	return ok
+}
+
+func NormalizeAllowedServiceName(service string) string {
+	return strings.TrimSpace(strings.ToLower(service))
 }
 
 // ─── Vault backend ──────────────────────────────────────────────────────────
@@ -340,5 +439,6 @@ func (s *UserStore) remove(username string) error {
 	if s.useVault {
 		return activeVault.DeleteSecret(userVaultPath, username)
 	}
+	delete(s.cache, username)
 	return s.saveToFile()
 }

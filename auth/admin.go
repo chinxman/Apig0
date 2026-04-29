@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func provisionUser(username, password, role string, allowedServices []string, restrictServices bool) (string, string, error) {
+func ProvisionUser(username, password, role string, allowedServices []string, restrictServices bool) (string, string, error) {
 	raw := make([]byte, 20)
 	if _, err := rand.Read(raw); err != nil {
 		return "", "", fmt.Errorf("failed to generate secret")
@@ -53,7 +53,7 @@ func CreateUserHandler(c *gin.Context) {
 
 	allowedServices := config.NormalizeAllowedServices(req.AllowedServices)
 	restrictServices := req.Role != "admin"
-	_, otpauth, err := provisionUser(req.Username, req.Password, req.Role, allowedServices, restrictServices)
+	_, otpauth, err := ProvisionUser(req.Username, req.Password, req.Role, allowedServices, restrictServices)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "already exists") {
@@ -78,6 +78,7 @@ func ListUsersHandler(c *gin.Context) {
 	type safeUser struct {
 		Username                string   `json:"username"`
 		Role                    string   `json:"role"`
+		ProtectedAdmin          bool     `json:"protected_admin,omitempty"`
 		ServiceAccessConfigured bool     `json:"service_access_configured"`
 		AllowedServices         []string `json:"allowed_services"`
 		CreatedAt               string   `json:"created_at"`
@@ -87,6 +88,7 @@ func ListUsersHandler(c *gin.Context) {
 		result = append(result, safeUser{
 			Username:                u.Username,
 			Role:                    u.Role,
+			ProtectedAdmin:          config.GetUserStore().IsProtectedAdmin(u.Username),
 			ServiceAccessConfigured: u.ServiceAccessConfigured,
 			AllowedServices:         config.NormalizeAllowedServices(u.AllowedServices),
 			CreatedAt:               u.CreatedAt.Format("2006-01-02"),
@@ -135,6 +137,10 @@ func UpdateUserAccessHandler(c *gin.Context) {
 // DELETE /api/admin/users/:user
 func DeleteUserHandler(c *gin.Context) {
 	username := c.Param("user")
+	if config.GetUserStore().IsProtectedAdmin(username) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "the first admin can only be removed by a full reset"})
+		return
+	}
 	if err := config.GetUserStore().Delete(username); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

@@ -12,7 +12,7 @@ vault:
 
 gateway:
   users: ""                        # leave blank; the setup flow creates the first admin
-  port: "8080"
+  port: "8989"
   session_ttl: 8h                  # e.g. 8h, 30m, 24h
   show_qr: false
   tls: auto                        # auto | off | /path/cert.pem,/path/key.pem

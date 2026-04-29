@@ -18,7 +18,7 @@ func TestBootstrapAdminHandlerCreatesFirstAdmin(t *testing.T) {
 
 	config.ActivateTemporarySetup(config.SetupConfig{
 		Mode:           config.SetupModeTemporary,
-		Port:           "8080",
+		Port:           "8989",
 		UserVault:      config.UserVaultSettings{Type: "file", FilePath: filepath.Join(t.TempDir(), "totp-secrets.json")},
 		ServiceSecrets: config.ServiceSecretConfig{Mode: config.ServiceSecretMemory},
 	})
@@ -59,7 +59,7 @@ func TestBootstrapAdminHandlerRejectsWhenAdminExists(t *testing.T) {
 
 	config.ActivateTemporarySetup(config.SetupConfig{
 		Mode:           config.SetupModeTemporary,
-		Port:           "8080",
+		Port:           "8989",
 		UserVault:      config.UserVaultSettings{Type: "file", FilePath: filepath.Join(t.TempDir(), "totp-secrets.json")},
 		ServiceSecrets: config.ServiceSecretConfig{Mode: config.ServiceSecretMemory},
 	})

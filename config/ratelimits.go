@@ -42,6 +42,7 @@ func LoadRateLimits() RateLimitSettings {
 	if rlData.Users == nil {
 		rlData.Users = make(map[string]RateLimitRule)
 	}
+	rlData = NormalizeRateLimitSettings(rlData)
 	log.Printf("[ratelimits] loaded (default: %d rpm)", rlData.Default.RequestsPerMinute)
 	return rlData
 }
@@ -61,10 +62,35 @@ func SaveRateLimits(s RateLimitSettings) error {
 	if s.Users == nil {
 		s.Users = make(map[string]RateLimitRule)
 	}
+	s = NormalizeRateLimitSettings(s)
 	rlData = s
 	raw, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(rlPath, raw, 0644)
+}
+
+func NormalizeRateLimitSettings(s RateLimitSettings) RateLimitSettings {
+	s.Default = NormalizeRateLimitRule(s.Default)
+	if s.Users == nil {
+		s.Users = make(map[string]RateLimitRule)
+	}
+	for user, rule := range s.Users {
+		s.Users[user] = NormalizeRateLimitRule(rule)
+	}
+	return s
+}
+
+func NormalizeRateLimitRule(rule RateLimitRule) RateLimitRule {
+	if rule.RequestsPerMinute < 0 {
+		rule.RequestsPerMinute = 0
+	}
+	if rule.RequestsPerMinute > 0 && rule.Burst <= 0 {
+		rule.Burst = 1
+	}
+	if rule.Burst < 0 {
+		rule.Burst = 0
+	}
+	return rule
 }

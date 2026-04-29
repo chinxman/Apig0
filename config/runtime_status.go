@@ -16,7 +16,11 @@ type RuntimeStatus struct {
 	UsersBackend          string              `json:"users_backend"`
 	UsersPath             string              `json:"users_path,omitempty"`
 	ServiceCount          int                 `json:"service_count"`
+	APITokenCount         int                 `json:"api_token_count"`
+	PolicyUserCount       int                 `json:"policy_user_count"`
 	ServiceSecrets        ServiceSecretConfig `json:"service_secrets"`
+	AuditLogPath          string              `json:"audit_log_path,omitempty"`
+	NodeMode              string              `json:"node_mode"`
 	ResetBehavior         string              `json:"reset_behavior"`
 	RecoveryHint          string              `json:"recovery_hint"`
 	PortChangeRequiresRun bool                `json:"port_change_requires_restart"`
@@ -36,10 +40,14 @@ func GetRuntimeStatus() RuntimeStatus {
 		UsersBackend:          "file",
 		UsersPath:             setup.UsersPath,
 		ServiceCount:          len(ListServiceNames()),
+		APITokenCount:         APITokenCount(),
+		PolicyUserCount:       AccessPolicyUserCount(),
 		ServiceSecrets:        serviceSecrets,
+		AuditLogPath:          AuditLogPath(),
+		NodeMode:              "single-node",
 		PortChangeRequiresRun: true,
-		ResetBehavior:         "Temporary mode leaves no durable local setup. Restarting returns the gateway to the setup flow.",
-		RecoveryHint:          "Complete setup in persistent mode to keep users, services, and rate limits across restart.",
+		ResetBehavior:         "Temporary mode lasts only for the running gateway process. Browser refresh keeps the current setup; restarting the gateway returns it to the setup flow.",
+		RecoveryHint:          "Complete setup in persistent mode to keep users, services, rate limits, access policies, and API tokens across restart.",
 	}
 
 	if store != nil {
@@ -63,7 +71,7 @@ func GetRuntimeStatus() RuntimeStatus {
 	case "file":
 		status.SecretsMode = "persistent"
 		status.SecretsPath = ActiveVaultFilePath()
-		status.ResetBehavior = fmt.Sprintf("Local persistent mode is active. Users and TOTP secrets stay available after restart while %s and %s remain intact.", status.UsersPath, status.SecretsPath)
+		status.ResetBehavior = fmt.Sprintf("Local persistent mode is active. Users, policies, API tokens, and TOTP secrets stay available after restart while %s and %s remain intact.", status.UsersPath, status.SecretsPath)
 		status.RecoveryHint = "Keep the local JSON files and your service master password safe."
 	case "env":
 		status.SecretsMode = "temporary"

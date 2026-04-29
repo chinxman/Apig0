@@ -62,7 +62,7 @@ func LoadAppConfig() {
 		setDefault("APIG0_SHOW_QR", "true")
 	}
 
-	log.Printf("[config] loaded apig0.yaml (vault.type=%s)", cfg.Vault.Type)
+	log.Printf("[config] apig0.yaml loaded")
 }
 
 // setDefault sets an env var only if it is not already defined.

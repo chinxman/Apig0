@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,9 +13,9 @@ import (
 )
 
 type bucket struct {
-	tokens    float64
-	lastRefil time.Time
-	mu        sync.Mutex
+	tokens     float64
+	lastRefill time.Time
+	mu         sync.Mutex
 }
 
 type RateLimiter struct {
@@ -40,7 +42,7 @@ func (rl *RateLimiter) sweep() {
 	defer rl.mu.Unlock()
 	for key, b := range rl.buckets {
 		b.mu.Lock()
-		stale := b.lastRefil.Before(cutoff)
+		stale := b.lastRefill.Before(cutoff)
 		b.mu.Unlock()
 		if stale {
 			delete(rl.buckets, key)
@@ -52,13 +54,21 @@ func RateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, _ := c.Get("session_user")
 		key, _ := user.(string)
+		overrideRule, hasTokenOverride := c.Get("api_token_rate_limit_rule")
+		tokenID := strings.TrimSpace(c.GetString("api_token_id"))
+		tokenRule, _ := overrideRule.(config.RateLimitRule)
 		if key == "" {
 			key = c.ClientIP()
 		}
 
 		settings := config.GetRateLimits()
 		rule := settings.Default
-		if r, ok := settings.Users[key]; ok {
+		if hasTokenOverride && tokenRule.RequestsPerMinute > 0 {
+			rule = config.NormalizeRateLimitRule(tokenRule)
+			if tokenID != "" {
+				key = "token:" + tokenID
+			}
+		} else if r, ok := settings.Users[key]; ok {
 			rule = r
 		}
 
@@ -67,8 +77,23 @@ func RateLimit() gin.HandlerFunc {
 			return
 		}
 
-		if !globalRateLimiter.allow(key, rule) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+		allowed, retryAfter := globalRateLimiter.allow(key, rule)
+		c.Header("X-RateLimit-Limit", strconv.Itoa(rule.RequestsPerMinute))
+		c.Header("X-RateLimit-Window", "60")
+		c.Header("X-RateLimit-Burst", strconv.Itoa(rule.Burst))
+		if !allowed {
+			if retryAfter < time.Second {
+				retryAfter = time.Second
+			}
+			retrySeconds := int(retryAfter.Seconds())
+			c.Header("Retry-After", strconv.Itoa(retrySeconds))
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":               "rate limit exceeded",
+				"limit_type":          "token_bucket",
+				"sustained_limit_rpm": rule.RequestsPerMinute,
+				"burst_allowance":     rule.Burst,
+				"retry_after_seconds": retrySeconds,
+			})
 			c.Abort()
 			return
 		}
@@ -76,15 +101,20 @@ func RateLimit() gin.HandlerFunc {
 	}
 }
 
-func (rl *RateLimiter) allow(key string, rule config.RateLimitRule) bool {
-	rl.mu.Lock()
-	b, ok := rl.buckets[key]
-	if !ok {
-		burst := rule.Burst
+func (rl *RateLimiter) allow(key string, rule config.RateLimitRule) (bool, time.Duration) {
+	rule = config.NormalizeRateLimitRule(rule)
+	if rule.RequestsPerMinute <= 0 {
+		return true, 0
+	}
+	burst := rule.Burst
 	if burst <= 0 {
 		burst = 1
 	}
-	b = &bucket{tokens: float64(burst), lastRefil: time.Now()}
+
+	rl.mu.Lock()
+	b, ok := rl.buckets[key]
+	if !ok {
+		b = &bucket{tokens: float64(burst), lastRefill: time.Now()}
 		rl.buckets[key] = b
 	}
 	rl.mu.Unlock()
@@ -93,17 +123,18 @@ func (rl *RateLimiter) allow(key string, rule config.RateLimitRule) bool {
 	defer b.mu.Unlock()
 
 	now := time.Now()
-	elapsed := now.Sub(b.lastRefil).Seconds()
+	elapsed := now.Sub(b.lastRefill).Seconds()
 	rate := float64(rule.RequestsPerMinute) / 60.0
 	b.tokens += elapsed * rate
-	if b.tokens > float64(rule.Burst) {
-		b.tokens = float64(rule.Burst)
+	if b.tokens > float64(burst) {
+		b.tokens = float64(burst)
 	}
-	b.lastRefil = now
+	b.lastRefill = now
 
 	if b.tokens < 1 {
-		return false
+		secondsUntilNextToken := (1 - b.tokens) / rate
+		return false, time.Duration(secondsUntilNextToken * float64(time.Second))
 	}
 	b.tokens--
-	return true
+	return true, 0
 }
