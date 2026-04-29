@@ -1,10 +1,27 @@
 # Apig0
 
-Apig0 is a Go-based internal API gateway with a built-in web admin UI.
+Apig0 is a Go-based internal API gateway with a built-in Web UI, local admin CLI, per-user gateway keys, and an OpenAI-compatible AI gateway surface.
+
+Today the product has two main user-facing access modes:
+
+- Standard API access:
+  users get assigned service-scoped gateway keys and copy generated commands into curl, Postman, Bruno, or their own tooling.
+- AI access:
+  users get assigned AI gateway keys and use `https://<gateway>/openai/v1` with OpenAI-compatible clients.
+
+## Current Product Shape
+
+- Browser login uses password + TOTP.
+- Admins manage users, services, saved upstream secrets, rate limits, access policies, audit, and gateway tokens.
+- Gateway tokens are hashed for authentication.
+- Raw gateway keys are shown once at creation or one-time claim time.
+- The user portal supports one-time key claim delivery.
+- Standard service access now uses a command generator, not a browser terminal.
+- AI access uses an OpenAI-compatible route with provider/model scoping.
 
 ## Route Map
 
-- `GET /` serves the web UI shell.
+- `GET /` serves the Web UI shell.
 - `GET /healthz` returns a basic health response.
 - `GET /metrics` exposes Prometheus-style gateway metrics.
 - `GET /api/setup/status` reports setup and storage mode state.
@@ -12,122 +29,251 @@ Apig0 is a Go-based internal API gateway with a built-in web admin UI.
 - `POST /api/setup/bootstrap-admin` creates an admin when setup exists but no admin remains.
 - `POST /auth/login`, `POST /auth/verify`, `POST /auth/logout` handle browser auth.
 - `GET /api/user/info` returns current user/session or token context.
+- `GET /api/user/pending-keys` lists one-time key deliveries for the logged-in user.
+- `POST /api/user/pending-keys/:id/claim` reveals a pending raw key once, then deletes the delivery.
 - `GET /api/admin/*` and `POST/PUT/DELETE /api/admin/*` back the admin UI.
-- `ANY /{service}/...` proxies traffic to configured upstream services after auth and policy checks.
+- `ANY /openai/v1` and `ANY /openai/v1/*` provide the AI gateway surface for AI-scoped tokens.
+- `ANY /{service}/...` proxies traffic to configured upstream services after auth, policy, and rate-limit checks.
 
-## Admin CLI
+## Web UI
 
-`apig0` now includes a built-in admin CLI alongside the web server.
+The Web UI is split between admin operations and the user portal.
 
-- `apig0` with no arguments starts the gateway server in the background.
-- `apig0 start` explicitly starts the gateway server in the background.
-- `apig0 stop` stops the managed background server with `SIGTERM`.
-- `apig0 restart` restarts the managed background server.
-- `apig0 serve` explicitly starts the gateway server.
-- `apig0 logs [-n N] [-f]` shows the background server log.
-  Without `-f` it prints a snapshot and exits. With `-f` it stays in the foreground and follows the log live.
-- `apig0 monitor [-n N] [-f] [--service name] [--errors]` shows structured request activity from the current background run.
-  Without `-f` it prints a snapshot and exits. With `-f` it stays in the foreground and streams live request events.
-- `apig0 status` prints runtime, setup, and storage state.
-- `apig0 setup status` prints the same setup/runtime state.
-- `apig0 setup reset --force` wipes setup and persistent gateway state, then reloads runtime.
-- `apig0 setup bootstrap-admin --username <name> --password <pass>` creates an admin only when setup is complete and no admin currently exists.
+### Portal
+
+The portal is now key-driven, not terminal-driven.
+
+- Standard keys:
+  the portal shows `API Access`, assigned endpoint info, key prefix/status, advanced request setup, and a copy-ready curl generator.
+- AI keys:
+  the portal shows `AI Access`, the AI gateway base URL, backend/model scope, and copyable curl/Python/JavaScript snippets.
+- Pending key deliveries:
+  if a token was created for the logged-in user, the portal can show a one-time `Claim Key` card.
+
+### Standard API Access
+
+The standard portal flow is:
+
+1. Admin creates a token for a user.
+2. User claims the key once in the portal or receives it manually.
+3. User selects an allowed service.
+4. User adjusts method/path/headers/body in the request generator.
+5. User copies the generated command into their preferred client.
+
+The standard portal no longer tries to act like a local shell. It is a copy/paste request generator.
+
+### AI Access
+
+The AI portal flow is:
+
+1. Admin marks a service as AI-gateway-enabled.
+2. Admin creates an `ai` token for a user and assigns AI service/model/provider scope.
+3. User claims the key once in the portal or receives it manually.
+4. User points an OpenAI-compatible client at:
+
+```text
+https://<gateway>/openai/v1
+```
+
+5. User authenticates with the claimed gateway key, not the upstream provider secret.
+
+## Gateway Tokens
+
+Gateway tokens are first-class user access keys.
+
+### Key Types
+
+- `standard`
+  standard service access through `/{service}/...`
+- `ai`
+  AI access through `/openai/v1`
+
+### Storage Model
+
+- The normal token store keeps:
+  - token hash
+  - token prefix
+  - user
+  - key type
+  - service/model/provider scope
+  - expiry / revoke / last-used state
+- The normal token store does not keep the raw token.
+
+### One-Time Delivery Model
+
+When a token is created in the admin UI:
+
+1. the raw token is generated
+2. only the hash is stored in the main token store
+3. a one-time delivery envelope is created for the assigned user
+4. the user can claim the raw key once from the portal
+5. after claim, the delivery record is removed
+
+Important:
+
+- If the user loses the raw key after claim, the normal recovery path is rotation or new token creation.
+- In persistent mode, pending delivery storage survives restart only when `APIG0_SERVICE_MASTER_PASSWORD` is available.
+- The CLI still prints raw tokens directly on `tokens create`, because it is a local operator path rather than the Web claim flow.
+
+## Admin Flows
+
+### Users
+
+- create user
+- delete user
+- reset TOTP
+- configure allowed services
+- edit route policies for non-admin users
+
+The first admin account is protected:
+
+- it is not deletable through the Web UI
+- the backend rejects deletion of that first admin
+- full setup reset is the intended destructive recovery path
+
+### Services
+
+Admins can configure:
+
+- service name
+- upstream base URL
+- auth type
+- custom header/basic auth options
+- provider label
+- OpenAI-compatible exposure flag
+- timeout
+- retry count
+- saved upstream secret
+
+Service secrets can be stored in file or encrypted-file modes depending on setup.
+
+### Tokens
+
+Admins can:
+
+- create tokens
+- revoke tokens
+- choose `standard` or `ai`
+- restrict allowed services
+- restrict allowed models/providers for AI keys
+- set token-level rate limit overrides
+- set expirations
+
+## AI Gateway
+
+The AI gateway is currently OpenAI-compatible on the public wire format.
+
+Supported pattern:
+
+```text
+https://<gateway>/openai/v1
+```
+
+This allows users to use:
+
+- curl
+- OpenAI-compatible SDKs
+- tools that support `base_url` plus API key override
+
+The current implementation is still centered on an OpenAI-compatible surface, even though the UI now presents it as a more general AI gateway.
+
+## CLI
+
+`apig0` includes a built-in local operator CLI.
+
+### Server Lifecycle
+
+- `apig0`
+- `apig0 start`
+- `apig0 serve`
+- `apig0 stop`
+- `apig0 restart`
+- `apig0 status`
+
+### Logs and Monitoring
+
+- `apig0 logs [-n N] [-f]`
+- `apig0 monitor [-n N] [-f] [--service name] [--errors]`
+
+### Setup
+
+- `apig0 setup status`
+- `apig0 setup reset --force`
+- `apig0 setup bootstrap-admin --username <name> --password <pass>`
+
+### Users
+
 - `apig0 users list`
 - `apig0 users add --username <name> --password <pass> [--role user|admin] [--services svc1,svc2]`
 - `apig0 users delete --username <name>`
+
+### Services
+
 - `apig0 services list`
 - `apig0 services add --name <svc> --url <base> [--auth-type ...] [--header ...] [--basic-username ...] [--timeout-ms ...] [--retry-count ...] [--secret ...]`
 - `apig0 services delete --name <svc>`
+
+### Tokens
+
 - `apig0 tokens list`
 - `apig0 tokens create --user <name> [--name ...] [--services svc1,svc2] [--expires-at RFC3339]`
 - `apig0 tokens revoke --id <token-id>`
 
 ### CLI Notes
 
-- The CLI works against the same local runtime and storage layer as the web UI. It does not call the HTTP admin API.
-- Background server logs are written to a temporary runtime log by default: `${TMPDIR:-/tmp}/apig0-runtime.log`. Set `APIG0_LOG_PATH` to change that path.
-- `go run main.go` now behaves like `go run main.go start`, so the shell returns immediately after printing the startup URL and log path.
-- Use `go run main.go serve` when you want the gateway attached to the current terminal.
-- `start` rewrites the runtime log for each new background launch so `logs` behaves like a live monitor for the current run instead of a cumulative archive.
-- `stop` targets the managed background PID written by `start`. Use `stop --force` if graceful shutdown does not complete.
-- Use `go run main.go logs -f` to watch startup, gin request logs, and runtime logging from the current background server run.
-- `monitor` is separate from `logs`. It streams structured request events captured by the gateway middleware rather than raw log lines.
-- `start` also resets the structured monitor stream for the new run, so `monitor` shows only current-session traffic by default.
-- `logs` and `monitor` both default to snapshot mode. Add `-f` when you want an attached live feed.
-- `users add` prints the generated `otpauth://` URL so the new user's TOTP seed can be enrolled.
-- `services add --secret ...` stores upstream credentials in the configured service-secret backend.
-- `tokens create` prints the raw token once. Store it securely when it is created.
-- `setup reset --force` is destructive and removes the saved setup/runtime files used by persistent mode.
+- The CLI works against the same local runtime and storage layer as the Web UI.
+- It does not call the HTTP admin API.
+- `tokens create` prints the raw token once to stdout.
+- The current CLI token creation path is still standard-service-oriented and does not expose the full Web UI AI-token options yet.
+- Background server logs are written to a runtime log path, configurable with `APIG0_LOG_PATH`.
 
-## Package Layout
+## Storage Modes
+
+### Temporary Mode
+
+- setup lasts for the current gateway process
+- browser refresh does not erase the active session state
+- restarting the gateway returns to first-run setup
+- service secrets stay in memory
+- pending key delivery claims do not survive restart
+
+### Persistent Mode
+
+- users, services, rate limits, policies, tokens, and setup persist across restart
+- service secrets use file-backed persistent modes
+- encrypted service-secret mode uses `APIG0_SERVICE_MASTER_PASSWORD`
+- pending key deliveries can persist when a master password is available
+
+## File and Package Layout
 
 - [`main.go`](main.go): startup, route wiring, TLS mode, static asset serving.
-- [`auth/`](auth): browser session auth, token auth, admin/setup handlers, TOTP flows.
-- [`config/`](config): runtime config, services, users, tokens, policies, audit, storage backends.
+- [`auth/`](auth): browser session auth, token auth, admin/setup handlers, TOTP flows, token delivery claim endpoints.
+- [`config/`](config): runtime config, users, services, service secret metadata, tokens, token deliveries, access policies, audit, setup/runtime storage.
 - [`middleware/`](middleware): CORS, CSRF, rate limiting, monitoring, Prometheus output.
-- [`proxy/`](proxy): reverse proxy behavior, upstream auth injection, timeout/retry handling.
-- [`cli/`](cli): built-in admin CLI for local operator management.
-- [`features/`](features): implementation notes for major passes.
+- [`proxy/`](proxy): reverse proxy behavior, upstream auth injection, timeout/retry handling, OpenAI-compatible AI proxy.
+- [`cli/`](cli): local operator CLI.
+- [`features/`](features): implementation notes for larger feature or hardening passes.
 
-## UI Layout
+### Frontend Files
 
 - [`webui.html`](webui.html): HTML shell only.
 - [`static/css/webui.css`](static/css/webui.css): UI styling.
 - [`static/vendor/qrcode.min.js`](static/vendor/qrcode.min.js): local QR dependency.
 - [`static/js/app-core.js`](static/js/app-core.js): shared app state, DOM helpers, API helpers.
-- [`static/js/auth.js`](static/js/auth.js): login, bootstrap admin, session boot, QR modal.
-- Portal is now a service-aware command generator on the main page. Users select an allowed service, fill method/path/token/body, and copy ready-to-run snippets into their own terminal or editor.
-- The Portal generator currently emits `curl`, `bash`, `python`, and `javascript` snippets against the gateway path `/{service}/...`.
-- Terminal-oriented snippets are token-based by design. Paste a scoped gateway token into the Portal generator or leave the placeholder in place until a token is issued.
+- [`static/js/auth.js`](static/js/auth.js): login, bootstrap admin, session boot, portal session info, pending key delivery loading.
+- [`static/js/portal-console.js`](static/js/portal-console.js): standard API command generator, AI access snippets, one-time key claim behavior.
 - [`static/js/setup.js`](static/js/setup.js): setup mode selection, storage upgrade, reset flow.
 - [`static/js/monitor.js`](static/js/monitor.js): SSE monitor, request log, audit panel, test console.
-- [`static/js/admin-services.js`](static/js/admin-services.js): service CRUD and secret metadata UI.
-- [`static/js/admin-users.js`](static/js/admin-users.js): user CRUD, access controls, policy editing.
-- [`static/js/admin-tokens.js`](static/js/admin-tokens.js): gateway token management.
+- [`static/js/admin-services.js`](static/js/admin-services.js): service CRUD and service-secret metadata UI.
+- [`static/js/admin-users.js`](static/js/admin-users.js): user CRUD, access controls, policy editing, protected-admin behavior.
+- [`static/js/admin-tokens.js`](static/js/admin-tokens.js): gateway token management, key type selection, claim-delivery-aware creation flow.
 - [`static/js/admin-ratelimits.js`](static/js/admin-ratelimits.js): rate limit editor UI.
 - [`static/js/navigation.js`](static/js/navigation.js): page switching and per-page data loading.
 - [`static/js/bootstrap.js`](static/js/bootstrap.js): delegated event wiring and app startup.
 
-## Storage Modes
+## Operator Notes
 
-- Temporary mode keeps the active setup only for the running gateway process. Browser refresh does not reset it; restarting the gateway returns to first-run setup.
-- Temporary mode always keeps service secrets in memory and uses the env-backed TOTP secret path by default.
-- Persistent mode writes gateway state to local files or supported secret backends so restarts keep users and configuration.
-- Persistent service secret storage is limited to two modes:
-  - `Non-Encrypted File`
-  - `Encrypted File`
-- Persistent setup normalizes service-secret storage to file-backed modes only. The in-memory `memory` mode is reserved for temporary runtime.
-- Setup/storage details are also described in [`TESTING.md`](TESTING.md) and [`apig0.yaml`](apig0.yaml).
-
-## Vault Provider Setup
-
-Persistent setup and the storage-upgrade flow support these primary TOTP secret backends in the web UI:
-
-- `Local File`
-- `Hashicorp Vault`
-- `AWS`
-- `GCP`
-- `Azure`
-- `1Password`
-
-Advanced providers are still available behind the UI's `Advanced vault providers` section:
-
-- `CyberArk`
-- `HTTP`
-- `Exec`
-
-### Provider Notes
-
-- `Local File` stores TOTP secrets in `totp-secrets.json` by default.
-- `Hashicorp Vault` requires a vault address and engine.
-- `AWS` uses the `aws` CLI backend. The setup UI can persist region/profile and optional key material for runtime use.
-- `GCP` uses the `gcloud` CLI backend. `GCP_PROJECT` is required. A credentials file path can be stored through setup.
-- `Azure` uses the `az` CLI backend. `AZURE_VAULT_NAME` is required. Tenant/client fields can also be stored through setup.
-- `1Password` uses the `op` CLI backend. The setup UI can persist `OP_VAULT` and an optional `OP_SERVICE_ACCOUNT_TOKEN`.
-- `CyberArk`, `HTTP`, and `Exec` are implemented as specialist or advanced backends and are not part of the primary setup path.
-
-### Operational Expectation
-
-- Provider-specific setup values entered in the web UI are persisted in setup state and re-applied on runtime reload.
-- CLI-backed providers still depend on the host environment being capable of running and authenticating those CLIs.
-- If a provider cannot initialize or pass its health check, the gateway logs the failure and falls back to the env backend for TOTP secrets.
+- The current Web product expects admins to assign keys to users rather than having users self-generate credentials.
+- Standard API users should treat the portal as a command generator, not an execution shell.
+- AI users should treat the portal as a client bootstrap screen for OpenAI-compatible SDK usage.
+- If a raw key is exposed in the browser after claim, that browser session should be treated as sensitive until logout or page close.
