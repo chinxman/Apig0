@@ -1,0 +1,51 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Apig0 squircle logo</title>
+  <desc id="desc">A tight professional Apig0 logo inside a rounded squircle frame with a cyber infrastructure style.</desc>
+  <defs>
+    <linearGradient id="frame" x1="92" y1="80" x2="1000" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="0.45" stop-color="#0B3B5E"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="665" y1="350" x2="880" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="140" y1="94" x2="940" y2="990" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.26"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.18"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#020617" flood-opacity="0.35"/>
+    </filter>
+    <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="22" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.20 0 0 0 0 0.83 0 0 0 0 0.72 0 0 0 0.65 0"/>
+      <feBlend in="SourceGraphic" mode="screen"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="74" y="74" width="932" height="932" rx="238" fill="url(#frame)"/>
+    <rect x="74" y="74" width="932" height="932" rx="238" stroke="url(#edge)" stroke-width="8"/>
+  </g>
+
+  <path d="M178 732C262 626 326 581 444 560C532 544 595 505 647 430C707 344 781 314 891 324" stroke="#67E8F9" stroke-opacity="0.16" stroke-width="26" stroke-linecap="round"/>
+  <path d="M178 348C263 454 326 499 444 520C532 536 595 575 647 650C707 736 781 766 891 756" stroke="#34D399" stroke-opacity="0.12" stroke-width="26" stroke-linecap="round"/>
+
+  <circle cx="250" cy="350" r="13" fill="#67E8F9" fill-opacity="0.55"/>
+  <circle cx="845" cy="760" r="13" fill="#34D399" fill-opacity="0.55"/>
+  <circle cx="478" cy="540" r="10" fill="#F8FAFC" fill-opacity="0.28"/>
+
+  <text x="139" y="620" fill="#F8FAFC" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="210" font-weight="850" letter-spacing="-13">Apig</text>
+
+  <g filter="url(#softGlow)">
+    <circle cx="797" cy="538" r="118" fill="#061827"/>
+    <circle cx="797" cy="538" r="91" stroke="url(#accent)" stroke-width="34"/>
+    <circle cx="797" cy="538" r="28" fill="#0F172A"/>
+  </g>
+
+  <path d="M690 300H818C856 300 887 331 887 369V392" stroke="#F8FAFC" stroke-opacity="0.18" stroke-width="18" stroke-linecap="round"/>
+  <path d="M887 684V708C887 746 856 776 818 776H690" stroke="#F8FAFC" stroke-opacity="0.14" stroke-width="18" stroke-linecap="round"/>
+</svg>

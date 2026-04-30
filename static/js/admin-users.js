@@ -62,7 +62,6 @@
         '<td style="color:var(--text-dim)">' + util.escHtml(created) + "</td>" +
         '<td><div class="actions">' +
         (isAdmin ? "" : '<button class="btn-primary" data-action="save-user-access" data-user="' + util.escAttr(user.username) + '" style="padding:4px 10px">Save Access</button>') +
-        (isAdmin ? "" : '<button class="btn-ghost" data-action="edit-user-policies" data-user="' + util.escAttr(user.username) + '">Policies</button>') +
         '<button class="btn-ghost" data-action="reset-user-totp" data-user="' + util.escAttr(user.username) + '">Reset TOTP</button>' +
         (protectedAdmin
           ? '<span class="service-muted">Reset only</span>'
@@ -143,36 +142,6 @@
     }
   }
 
-  async function editUserPolicies(username) {
-    try {
-      const {ok, data} = await api.get("/api/admin/users/" + encodeURIComponent(username) + "/policies", {csrf: true});
-      if (!ok) {
-        setNotice((data && data.error) || "Failed to load policies", "err");
-        return;
-      }
-      const draft = window.prompt(
-        'Edit route policies as JSON. Example:\n[{"service":"orders","path_prefix":"/read","methods":["GET"]}]',
-        JSON.stringify(data.policies || [], null, 2)
-      );
-      if (draft === null) return;
-      let parsed;
-      try {
-        parsed = draft.trim() ? JSON.parse(draft) : [];
-      } catch {
-        setNotice("Policy JSON is invalid", "err");
-        return;
-      }
-      const save = await api.put("/api/admin/users/" + encodeURIComponent(username) + "/policies", {policies: parsed}, {csrf: true});
-      if (!save.ok) {
-        setNotice((save.data && save.data.error) || "Failed to save policies", "err");
-        return;
-      }
-      setNotice('Route policies updated for "' + username + '"', "ok");
-    } catch {
-      setNotice("Network error", "err");
-    }
-  }
-
   async function deleteUser(username) {
     if (!window.confirm('Delete user "' + username + '"? This cannot be undone.')) return;
     try {
@@ -206,7 +175,6 @@
   App.actions["toggle-create-user-form"] = toggleCreateForm;
   App.actions["create-user"] = createUser;
   App.actions["save-user-access"] = (el) => saveUserAccess(el.dataset.user);
-  App.actions["edit-user-policies"] = (el) => editUserPolicies(el.dataset.user);
   App.actions["delete-user"] = (el) => deleteUser(el.dataset.user);
   App.actions["reset-user-totp"] = (el) => resetTOTP(el.dataset.user);
 
@@ -218,7 +186,6 @@
     toggleCreateForm,
     createUser,
     saveUserAccess,
-    editUserPolicies,
     deleteUser,
     resetTOTP,
     updateCreateServiceHint,

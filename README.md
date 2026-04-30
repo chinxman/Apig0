@@ -1,23 +1,59 @@
-# Apig0
+<div align="center">
+  <img width="860" src="media/apig0-logo-squircle-tight.svg" alt="Apig0 logo">
+  <h1>Apig0</h1>
+  <p><strong>Internal API gateway with a built-in admin portal, per-user gateway keys, one-time key claim delivery, and an OpenAI-compatible AI gateway.</strong></p>
+  <p>
+    <a href="#why-apig0">Why Apig0</a>&nbsp;&nbsp;&nbsp;
+    <a href="#web-ui">Web UI</a>&nbsp;&nbsp;&nbsp;
+    <a href="#gateway-tokens">Gateway Tokens</a>&nbsp;&nbsp;&nbsp;
+    <a href="#ai-gateway">AI Gateway</a>&nbsp;&nbsp;&nbsp;
+    <a href="#cli">CLI</a>
+  </p>
+</div>
 
-Apig0 is a Go-based internal API gateway with a built-in Web UI, local admin CLI, per-user gateway keys, and an OpenAI-compatible AI gateway surface.
+## Why Apig0
 
-Today the product has two main user-facing access modes:
+Apig0 is a Go-based gateway for teams that need real user-level controls in front of internal APIs without handing upstream secrets directly to every client.
 
-- Standard API access:
-  users get assigned service-scoped gateway keys and copy generated commands into curl, Postman, Bruno, or their own tooling.
-- AI access:
-  users get assigned AI gateway keys and use `https://<gateway>/openai/v1` with OpenAI-compatible clients.
+| Core idea | What that means in practice |
+| --- | --- |
+| User-level gateway access | Assign services and keys per user instead of sharing one internal credential. |
+| Safer key delivery | Raw gateway keys are shown once and can be claimed from the user portal. |
+| AI-ready front door | Expose approved AI backends behind `https://<gateway>/openai/v1`. |
+| Local-first operations | Run and manage the gateway from the Web UI or the built-in CLI. |
+
+## Highlights
+
+- Built-in Web UI for setup, admin workflows, user portal access, token management, and audit visibility.
+- Password + TOTP browser login for operators and portal users.
+- Standard API access through service-scoped gateway keys and copy-ready request generation.
+- AI access through OpenAI-compatible clients with gateway-side service, provider, and model scoping.
+- Rate limiting, upstream auth injection, one-time key delivery, and per-route policy enforcement in the gateway layer.
+
+## Contents
+
+- [Why Apig0](#why-apig0)
+- [Current Product Shape](#current-product-shape)
+- [Route Map](#route-map)
+- [Web UI](#web-ui)
+- [Gateway Tokens](#gateway-tokens)
+- [Admin Flows](#admin-flows)
+- [AI Gateway](#ai-gateway)
+- [CLI](#cli)
+- [Storage Modes](#storage-modes)
+- [File and Package Layout](#file-and-package-layout)
+- [Operator Notes](#operator-notes)
 
 ## Current Product Shape
 
 - Browser login uses password + TOTP.
-- Admins manage users, services, saved upstream secrets, rate limits, access policies, audit, and gateway tokens.
+- Admins manage users, services, saved upstream secrets, rate limits, audit, and gateway tokens.
 - Gateway tokens are hashed for authentication.
 - Raw gateway keys are shown once at creation or one-time claim time.
 - The user portal supports one-time key claim delivery.
 - Standard service access now uses a command generator, not a browser terminal.
 - AI access uses an OpenAI-compatible route with provider/model scoping.
+- The backend can enforce per-user route policies during proxied requests.
 
 ## Route Map
 
@@ -123,7 +159,6 @@ Important:
 - delete user
 - reset TOTP
 - configure allowed services
-- edit route policies for non-admin users
 
 The first admin account is protected:
 
@@ -265,7 +300,7 @@ The current implementation is still centered on an OpenAI-compatible surface, ev
 - [`static/js/setup.js`](static/js/setup.js): setup mode selection, storage upgrade, reset flow.
 - [`static/js/monitor.js`](static/js/monitor.js): SSE monitor, request log, audit panel, test console.
 - [`static/js/admin-services.js`](static/js/admin-services.js): service CRUD and service-secret metadata UI.
-- [`static/js/admin-users.js`](static/js/admin-users.js): user CRUD, access controls, policy editing, protected-admin behavior.
+- [`static/js/admin-users.js`](static/js/admin-users.js): user CRUD, access controls, protected-admin behavior.
 - [`static/js/admin-tokens.js`](static/js/admin-tokens.js): gateway token management, key type selection, claim-delivery-aware creation flow.
 - [`static/js/admin-ratelimits.js`](static/js/admin-ratelimits.js): rate limit editor UI.
 - [`static/js/navigation.js`](static/js/navigation.js): page switching and per-page data loading.
