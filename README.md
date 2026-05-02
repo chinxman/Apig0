@@ -287,7 +287,6 @@ The current implementation is still centered on an OpenAI-compatible surface, ev
 - [`middleware/`](middleware): CORS, CSRF, rate limiting, monitoring, Prometheus output.
 - [`proxy/`](proxy): reverse proxy behavior, upstream auth injection, timeout/retry handling, OpenAI-compatible AI proxy.
 - [`cli/`](cli): local operator CLI.
-- [`features/`](features): implementation notes for larger feature or hardening passes.
 
 ### Frontend Files
 
@@ -312,3 +311,5 @@ The current implementation is still centered on an OpenAI-compatible surface, ev
 - Standard API users should treat the portal as a command generator, not an execution shell.
 - AI users should treat the portal as a client bootstrap screen for OpenAI-compatible SDK usage.
 - If a raw key is exposed in the browser after claim, that browser session should be treated as sensitive until logout or page close.
+- `APIG0_TRUSTED_PROXIES` accepts a comma-separated list of trusted proxy IPs/CIDRs. The default trusts loopback only.
+- `APIG0_CORS_ORIGINS` accepts a comma-separated list of allowed browser origins. The default is `*` for token-based API clients.

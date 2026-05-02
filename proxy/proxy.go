@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -20,7 +19,9 @@ import (
 func NewReverseProxy(service config.ServiceConfig) gin.HandlerFunc {
 	u, err := url.Parse(service.BaseURL)
 	if err != nil {
-		log.Fatal(err)
+		return func(c *gin.Context) {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "invalid upstream URL"})
+		}
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
@@ -166,7 +167,6 @@ func (rt *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		attempts += rt.service.RetryCount
 	}
 
-	var lastResp *http.Response
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		cloned := cloneRequest(req)
@@ -178,11 +178,11 @@ func (rt *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		cloned = cloned.WithContext(ctx)
 		resp, err := rt.base.RoundTrip(cloned)
 		cancel()
-		if err == nil && !shouldRetryStatus(req.Method, resp.StatusCode) {
+		isLastAttempt := attempt == attempts-1
+		if err == nil && (!shouldRetryStatus(req.Method, resp.StatusCode) || isLastAttempt) {
 			return resp, nil
 		}
 		if resp != nil {
-			lastResp = resp
 			if !shouldRetryStatus(req.Method, resp.StatusCode) {
 				return resp, nil
 			}
@@ -190,9 +190,6 @@ func (rt *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			resp.Body.Close()
 		}
 		lastErr = err
-	}
-	if lastResp != nil {
-		return lastResp, nil
 	}
 	return nil, lastErr
 }

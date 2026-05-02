@@ -297,11 +297,11 @@ func resetTargetsLocked() []string {
 		"access-policies.json",
 		"service-secret-metadata.json",
 		"audit.log",
-		apiTokensFilePath(),
-		pendingTokenDeliveryFilePath(),
-		accessPoliciesFilePath(),
-		serviceSecretMetadataPath(),
-		auditFilePath(),
+		apiTokensFilePathForSetupLocked(),
+		pendingTokenDeliveryFilePathForSetupLocked(),
+		accessPoliciesFilePathForSetupLocked(),
+		serviceSecretMetadataPathForSetupLocked(),
+		auditFilePathForSetupLocked(),
 		"service-secrets.json",
 		"service-secrets.enc.json",
 		"totp-secrets.json",
@@ -328,6 +328,56 @@ func resetTargetsLocked() []string {
 		out = append(out, candidate)
 	}
 	return out
+}
+
+func apiTokensFilePathForSetupLocked() string {
+	if path := strings.TrimSpace(os.Getenv("APIG0_API_TOKENS_PATH")); path != "" {
+		return path
+	}
+	if activeSetup.Mode == SetupModePersistent {
+		return "api-tokens.json"
+	}
+	return apiTokenPath
+}
+
+func pendingTokenDeliveryFilePathForSetupLocked() string {
+	if path := strings.TrimSpace(os.Getenv("APIG0_TOKEN_DELIVERIES_PATH")); path != "" {
+		return path
+	}
+	if activeSetup.Mode == SetupModePersistent {
+		return "api-token-deliveries.json"
+	}
+	return pendingTokenDeliveryPath
+}
+
+func accessPoliciesFilePathForSetupLocked() string {
+	if path := strings.TrimSpace(os.Getenv("APIG0_ACCESS_POLICIES_PATH")); path != "" {
+		return path
+	}
+	if activeSetup.Mode == SetupModePersistent {
+		return "access-policies.json"
+	}
+	return accessPolicyPath
+}
+
+func serviceSecretMetadataPathForSetupLocked() string {
+	if path := strings.TrimSpace(os.Getenv("APIG0_SERVICE_SECRET_METADATA_PATH")); path != "" {
+		return path
+	}
+	if activeSetup.Mode == SetupModePersistent {
+		return "service-secret-metadata.json"
+	}
+	return serviceSecretMetaPath
+}
+
+func auditFilePathForSetupLocked() string {
+	if path := strings.TrimSpace(os.Getenv("APIG0_AUDIT_LOG_PATH")); path != "" {
+		return path
+	}
+	if activeSetup.Mode == SetupModePersistent {
+		return "audit.log"
+	}
+	return auditLogPath
 }
 
 // UpgradeToPersistent converts a temporary runtime into a persisted one.

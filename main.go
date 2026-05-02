@@ -48,7 +48,9 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	r.SetTrustedProxies([]string{"127.0.0.1", "192.168.12.0/24"})
+	if err := r.SetTrustedProxies(trustedProxies()); err != nil {
+		log.Fatalf("[startup] invalid trusted proxy config: %v", err)
+	}
 
 	// Create monitor and register known services
 	mon := middleware.NewMonitor()
@@ -352,4 +354,23 @@ func advertisedHost() string {
 		}
 	}
 	return "127.0.0.1"
+}
+
+func trustedProxies() []string {
+	raw := strings.TrimSpace(os.Getenv("APIG0_TRUSTED_PROXIES"))
+	if raw == "" {
+		return []string{"127.0.0.1", "::1"}
+	}
+
+	parts := strings.Split(raw, ",")
+	proxies := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if proxy := strings.TrimSpace(part); proxy != "" {
+			proxies = append(proxies, proxy)
+		}
+	}
+	if len(proxies) == 0 {
+		return []string{"127.0.0.1", "::1"}
+	}
+	return proxies
 }

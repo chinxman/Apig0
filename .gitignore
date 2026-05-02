@@ -1,6 +1,7 @@
 # Build artifacts
 apig0
 apig0.exe
+dist/
 
 # macOS metadata
 .DS_Store
@@ -22,6 +23,7 @@ certs/
 
 # Claude context
 .claude/
+.codex
 
 # Standalone tools (managed separately)
 secret-creator/
@@ -32,6 +34,15 @@ users.json
 services.json
 ratelimits.json
 totp-secrets.json
+api-tokens.json
+api-token-deliveries.json
+access-policies.json
+service-secret-metadata.json
+service-secrets.json
+service-secrets.enc.json
+audit.log
+*.log
+*.pid
 
 # QR code output
 *-totp-qr.png
