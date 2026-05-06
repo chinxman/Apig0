@@ -81,6 +81,9 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", embeddedWebUI)
 	})
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
 	r.GET("/dashboard", func(c *gin.Context) {
 		c.Redirect(301, "/")
 	})
