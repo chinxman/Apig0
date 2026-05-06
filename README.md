@@ -64,7 +64,7 @@ Apig0 is maintained by the project owner with Codex assistance. The current code
 
 - `GET /` serves the Web UI shell.
 - `GET /healthz` returns a basic health response.
-- `GET /metrics` exposes Prometheus-style gateway metrics.
+- `GET /metrics` exposes Prometheus-style gateway metrics after admin-session or metrics-token authentication.
 - `GET /api/setup/status` reports setup and storage mode state.
 - `POST /api/setup/complete` completes first-run setup.
 - `POST /api/setup/bootstrap-admin` creates an admin when setup exists but no admin remains.
@@ -317,4 +317,6 @@ The current implementation is still centered on an OpenAI-compatible surface, ev
 - AI users should treat the portal as a client bootstrap screen for OpenAI-compatible SDK usage.
 - If a raw key is exposed in the browser after claim, that browser session should be treated as sensitive until logout or page close.
 - `APIG0_TRUSTED_PROXIES` accepts a comma-separated list of trusted proxy IPs/CIDRs. The default trusts loopback only.
-- `APIG0_CORS_ORIGINS` accepts a comma-separated list of allowed browser origins. The default is `*` for token-based API clients.
+- `APIG0_CORS_ORIGINS` accepts a comma-separated list of allowed browser origins. The default emits no cross-origin allow header.
+- `APIG0_CORS_ALLOW_WILDCARD=true` is available only for deliberate non-production compatibility cases.
+- `/metrics` requires an admin browser session or `APIG0_METRICS_TOKEN` sent as `Authorization: Bearer <token>` or `X-API-Key`.

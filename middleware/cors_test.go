@@ -9,8 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestCorsPreflightAllowsAPIHeaders(t *testing.T) {
+func TestCorsPreflightAllowsConfiguredAPIHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Setenv("APIG0_CORS_ORIGINS", "https://client.example")
 
 	router := gin.New()
 	router.Use(Cors())
@@ -27,7 +28,7 @@ func TestCorsPreflightAllowsAPIHeaders(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", w.Code)
 	}
-	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://client.example" {
 		t.Fatalf("unexpected allow-origin header: %q", got)
 	}
 	allowedHeaders := w.Header().Get("Access-Control-Allow-Headers")
@@ -35,6 +36,30 @@ func TestCorsPreflightAllowsAPIHeaders(t *testing.T) {
 		if !strings.Contains(allowedHeaders, header) {
 			t.Fatalf("missing CORS header %q in %q", header, allowedHeaders)
 		}
+	}
+}
+
+func TestCorsDefaultRejectsCrossOriginPreflight(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("APIG0_CORS_ORIGINS", "")
+
+	router := gin.New()
+	router.Use(Cors())
+	router.OPTIONS("/resource", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodOptions, "/resource", nil)
+	req.Header.Set("Origin", "https://client.example")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("unexpected allow-origin header: %q", got)
 	}
 }
 

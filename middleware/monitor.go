@@ -200,7 +200,6 @@ func (m *Monitor) SSEHandler() gin.HandlerFunc {
 		c.Writer.Header().Set("Content-Type", "text/event-stream")
 		c.Writer.Header().Set("Cache-Control", "no-cache")
 		c.Writer.Header().Set("Connection", "keep-alive")
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 
 		// Send initial snapshot
 		snap := m.snapshot()

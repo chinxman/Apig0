@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"net"
 	"net/http"
@@ -203,25 +204,67 @@ func SessionMiddleware() gin.HandlerFunc {
 // the CSRF-protected Web UI session path.
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tok, err := c.Cookie("apig0_session")
-		if err != nil || tok == "" {
+		user, ok := adminUserFromSession(c)
+		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			return
 		}
-		user, ok := ValidateSession(tok)
-		if !ok || user == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-			return
-		}
-		c.Set("session_user", user)
-		c.Set("auth_source", "session")
 
-		if config.GetUserStore() != nil && config.GetUserStore().GetRole(user) != "admin" {
+		if !isAdminUser(user) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
 			return
 		}
 		c.Next()
 	}
+}
+
+func MetricsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		expected := strings.TrimSpace(os.Getenv("APIG0_METRICS_TOKEN"))
+		if expected != "" {
+			raw := extractBearerToken(c.GetHeader("Authorization"))
+			if raw == "" {
+				raw = strings.TrimSpace(c.GetHeader("X-API-Key"))
+			}
+			if constantTimeStringEqual(raw, expected) {
+				c.Set("auth_source", "metrics_token")
+				c.Next()
+				return
+			}
+		}
+
+		if user, ok := adminUserFromSession(c); ok && isAdminUser(user) {
+			c.Next()
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "metrics authentication required"})
+	}
+}
+
+func adminUserFromSession(c *gin.Context) (string, bool) {
+	tok, err := c.Cookie("apig0_session")
+	if err != nil || tok == "" {
+		return "", false
+	}
+	user, ok := ValidateSession(tok)
+	if !ok || user == "" {
+		return "", false
+	}
+	c.Set("session_user", user)
+	c.Set("auth_source", "session")
+	return user, true
+}
+
+func constantTimeStringEqual(a, b string) bool {
+	if a == "" || b == "" || len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+func isAdminUser(user string) bool {
+	store := config.GetUserStore()
+	return store != nil && store.GetRole(user) == "admin"
 }
 
 // IsSecure returns true when the gateway should set Secure cookies.

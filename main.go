@@ -70,6 +70,7 @@ func main() {
 	// Global middleware: CORS → Monitor
 	// Auth is enforced per-route: SessionMiddleware on proxy + admin endpoints.
 	r.Use(middleware.Cors())
+	r.Use(middleware.SecurityHeaders())
 	r.Use(mon.Middleware())
 	staticFS, err := fs.Sub(embeddedStatic, "static")
 	if err != nil {
@@ -129,7 +130,7 @@ func main() {
 	admin.POST("/settings/ratelimits", auth.SaveRateLimitsHandler)
 	admin.POST("/settings/storage", auth.UpgradeStorageHandler)
 	admin.POST("/setup/reset", auth.ResetSetupHandler)
-	r.GET("/metrics", middleware.PrometheusHandler(mon))
+	r.GET("/metrics", auth.MetricsMiddleware(), middleware.PrometheusHandler(mon))
 
 	// User info endpoint — session + rate limit required
 	r.GET("/api/user/info", auth.SessionMiddleware(), middleware.RateLimit(), func(c *gin.Context) {
