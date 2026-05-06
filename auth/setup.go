@@ -12,7 +12,12 @@ import (
 
 // GET /api/setup/status
 func SetupStatusHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, config.GetRuntimeStatus())
+	status := config.GetRuntimeStatus()
+	if isAdminBrowserSession(c) {
+		c.JSON(http.StatusOK, status)
+		return
+	}
+	c.JSON(http.StatusOK, config.PublicStatus(status))
 }
 
 // POST /api/admin/setup/reset
@@ -37,7 +42,7 @@ func CompleteSetupHandler(c *gin.Context) {
 	// If setup ran before but all users were lost (e.g. temporary mode restart),
 	// allow re-setup so the admin can be recreated without wiping service config.
 	if !status.SetupRequired && status.HasAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "setup already completed", "status": status})
+		c.JSON(http.StatusForbidden, gin.H{"error": "setup already completed", "status": config.PublicStatus(status)})
 		return
 	}
 
@@ -126,12 +131,13 @@ func BootstrapAdminHandler(c *gin.Context) {
 		return
 	}
 
-	if config.GetRuntimeStatus().SetupRequired {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "complete initial setup first", "status": config.GetRuntimeStatus()})
+	status := config.GetRuntimeStatus()
+	if status.SetupRequired {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "complete initial setup first", "status": config.PublicStatus(status)})
 		return
 	}
-	if config.GetRuntimeStatus().HasAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "bootstrap disabled: admin already exists", "status": config.GetRuntimeStatus()})
+	if status.HasAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "bootstrap disabled: admin already exists", "status": config.PublicStatus(status)})
 		return
 	}
 
@@ -210,4 +216,17 @@ func UpgradeStorageHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "status": config.GetRuntimeStatus()})
+}
+
+func isAdminBrowserSession(c *gin.Context) bool {
+	tok, err := c.Cookie("apig0_session")
+	if err != nil || tok == "" {
+		return false
+	}
+	user, ok := ValidateSession(tok)
+	if !ok || user == "" {
+		return false
+	}
+	store := config.GetUserStore()
+	return store != nil && store.GetRole(user) == "admin"
 }

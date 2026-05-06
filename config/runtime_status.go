@@ -26,6 +26,26 @@ type RuntimeStatus struct {
 	PortChangeRequiresRun bool                `json:"port_change_requires_restart"`
 }
 
+type PublicRuntimeStatus struct {
+	HasAdmin             bool   `json:"has_admin"`
+	BootstrapRequired    bool   `json:"bootstrap_required"`
+	SetupRequired        bool   `json:"setup_required"`
+	SetupMode            string `json:"setup_mode"`
+	PersistentConfigured bool   `json:"persistent_configured"`
+	Port                 string `json:"port,omitempty"`
+}
+
+func PublicStatus(status RuntimeStatus) PublicRuntimeStatus {
+	return PublicRuntimeStatus{
+		HasAdmin:             status.HasAdmin,
+		BootstrapRequired:    status.BootstrapRequired,
+		SetupRequired:        status.SetupRequired,
+		SetupMode:            status.SetupMode,
+		PersistentConfigured: status.PersistentConfigured,
+		Port:                 status.Port,
+	}
+}
+
 func GetRuntimeStatus() RuntimeStatus {
 	setup := CurrentSetupConfig()
 	store := GetUserStore()

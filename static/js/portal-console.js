@@ -340,33 +340,39 @@
 
   function saveHistory() {
     try {
-      window.localStorage.setItem(historyKey, JSON.stringify(state.portalHistory.slice(0, 20)));
+      window.localStorage.removeItem(historyKey);
     } catch {}
   }
 
   function loadHistory() {
     try {
-      state.portalHistory = JSON.parse(window.localStorage.getItem(historyKey) || "[]");
-      if (!Array.isArray(state.portalHistory)) state.portalHistory = [];
+      window.localStorage.removeItem(historyKey);
     } catch {
-      state.portalHistory = [];
     }
+    state.portalHistory = [];
+  }
+
+  function safeHistoryHeaders(raw) {
+    return formatHeaders(parseHeaders(raw).filter((header) => {
+      const name = header.name.toLowerCase();
+      return !["authorization", "proxy-authorization", "x-api-key", "cookie", "set-cookie"].includes(name);
+    }));
   }
 
   function recordHistory() {
     const service = selectedService();
     if (!service) return;
+    const headersText = safeHistoryHeaders(state.portalHeadersText);
     const entry = {
       ts: Date.now(),
       service,
       method: state.portalMethod,
       path: normalizedPath(state.portalPath),
-      body: state.portalBody,
-      token: state.portalToken,
-      headersText: state.portalHeadersText,
+      body: "",
+      headersText,
       insecure: !!dom.id("portal-insecure")?.checked,
       label: state.portalMethod + " " + service + normalizedPath(state.portalPath),
-      preview: exportHeaders().length + " header" + (exportHeaders().length === 1 ? "" : "s") + (String(state.portalBody || "").trim() ? " | body set" : "")
+      preview: parseHeaders(headersText).length + " saved header" + (parseHeaders(headersText).length === 1 ? "" : "s")
     };
     const key = [
       entry.label,
@@ -393,8 +399,8 @@
     state.portalMethod = item.method || "GET";
     state.portalPath = item.path || "/";
     state.portalBody = item.body || "";
-    state.portalToken = item.token || "";
-    state.portalHeadersText = item.headersText || "";
+    state.portalToken = "";
+    state.portalHeadersText = safeHistoryHeaders(item.headersText || "");
     const insecure = dom.id("portal-insecure");
     if (insecure) insecure.checked = item.insecure !== false;
     updateFormFromState();

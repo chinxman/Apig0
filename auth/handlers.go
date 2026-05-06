@@ -11,8 +11,9 @@ import (
 // LoginHandler validates username + password and returns a short-lived challenge token.
 // POST /auth/login  {"username":"...","password":"..."}
 func LoginHandler(c *gin.Context) {
-	if config.GetRuntimeStatus().SetupRequired {
-		c.JSON(http.StatusForbidden, gin.H{"error": "complete initial setup first", "status": config.GetRuntimeStatus()})
+	status := config.GetRuntimeStatus()
+	if status.SetupRequired {
+		c.JSON(http.StatusForbidden, gin.H{"error": "complete initial setup first", "status": config.PublicStatus(status)})
 		return
 	}
 
@@ -43,8 +44,9 @@ func LoginHandler(c *gin.Context) {
 // VerifyHandler validates the challenge token + TOTP code and sets a session cookie.
 // POST /auth/verify  {"challenge":"...","code":"..."}
 func VerifyHandler(c *gin.Context) {
-	if config.GetRuntimeStatus().SetupRequired {
-		c.JSON(http.StatusForbidden, gin.H{"error": "complete initial setup first", "status": config.GetRuntimeStatus()})
+	status := config.GetRuntimeStatus()
+	if status.SetupRequired {
+		c.JSON(http.StatusForbidden, gin.H{"error": "complete initial setup first", "status": config.PublicStatus(status)})
 		return
 	}
 

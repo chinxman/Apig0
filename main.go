@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"io"
 	"io/fs"
@@ -74,7 +75,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("[startup] failed to prepare embedded static assets: %v", err)
 	}
-	r.StaticFS("/static", http.FS(staticFS))
+	r.GET("/static/*assetPath", func(c *gin.Context) {
+		serveEmbeddedStatic(c, staticFS)
+	})
 
 	// Unified WebUI — login overlay gates access, role determines visible panels.
 	// Admin data still requires AdminMiddleware on /api/admin/*.
@@ -141,10 +144,16 @@ func main() {
 				allowed = explicit
 			}
 		}
+		tokenScoped := false
 		if scoped, ok := c.Get("api_token_allowed_services"); ok {
 			if tokenAllowed, ok := scoped.([]string); ok && len(tokenAllowed) > 0 {
 				allowed = tokenAllowed
+				tokenScoped = true
 			}
+		}
+		catalog := services
+		if role != "admin" || tokenScoped {
+			catalog = allowed
 		}
 		assignedToken, hasAssignedToken := config.GetLatestActiveTokenForUser(username)
 		assignedBackendLabel := ""
@@ -166,7 +175,7 @@ func main() {
 			"auth_source":                c.GetString("auth_source"),
 			"service_access_configured":  role == "admin" || config.GetUserStore().HasConfiguredServiceAccess(username),
 			"available_services":         allowed,
-			"service_catalog":            services,
+			"service_catalog":            catalog,
 			"node_mode":                  config.GetRuntimeStatus().NodeMode,
 			"has_assigned_token":         hasAssignedToken,
 			"assigned_token_type":        assignedToken.KeyType,
@@ -334,6 +343,34 @@ func logStartupSummary(scheme, host, port string, tlsCfg config.TLSConfig) {
 		}
 		log.Printf("[startup] TLS: auto-cert active (%s)", tlsCfg.CertFile)
 	}
+}
+
+func serveEmbeddedStatic(c *gin.Context, staticFS fs.FS) {
+	assetPath := strings.TrimPrefix(c.Param("assetPath"), "/")
+	if assetPath == "" || assetPath == "." || !fs.ValidPath(assetPath) {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	file, err := staticFS.Open(assetPath)
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil || info.IsDir() {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(c.Writer, c.Request, assetPath, info.ModTime(), bytes.NewReader(content))
 }
 
 func advertisedHost() string {

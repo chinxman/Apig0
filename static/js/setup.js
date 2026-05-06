@@ -10,8 +10,10 @@
 
   function renderStatus() {
     if (!state.setupStatus) return;
-    const secretsText = state.setupStatus.secrets_backend + (state.setupStatus.secrets_path ? " • " + state.setupStatus.secrets_path : "");
-    const usersText = state.setupStatus.users_backend + (state.setupStatus.users_path ? " • " + state.setupStatus.users_path : "");
+    const secretsBackend = state.setupStatus.secrets_backend || "-";
+    const usersBackend = state.setupStatus.users_backend || "-";
+    const secretsText = secretsBackend + (state.setupStatus.secrets_path ? " • " + state.setupStatus.secrets_path : "");
+    const usersText = usersBackend + (state.setupStatus.users_path ? " • " + state.setupStatus.users_path : "");
     const isPersistent = state.setupStatus.persistent_configured;
     const modeText = isPersistent ? "Persistent" : "Temporary (in-memory)";
 
