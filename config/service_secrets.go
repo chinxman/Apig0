@@ -186,7 +186,7 @@ func savePlainServiceSecrets(path string, secrets map[string]string) error {
 	if path == "" {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil && filepath.Dir(path) != "." {
+	if err := ensureParentDir(path); err != nil {
 		return err
 	}
 	raw, err := json.MarshalIndent(serviceSecretFile{Secrets: secrets}, "", "  ")
@@ -253,7 +253,7 @@ func saveEncryptedServiceSecrets(path string, secrets map[string]string, masterP
 	if path == "" {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil && filepath.Dir(path) != "." {
+	if err := ensureParentDir(path); err != nil {
 		return err
 	}
 

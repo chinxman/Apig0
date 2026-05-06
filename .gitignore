@@ -21,8 +21,8 @@ dist/
 # TLS certs
 certs/
 
-# Claude context
-.claude/
+# Local assistant context
+.codex/
 .codex
 
 # Standalone tools (managed separately)

@@ -310,11 +310,5 @@ func normalizeServiceConfig(svc ServiceConfig) (ServiceConfig, bool) {
 }
 
 func NormalizeProviderName(raw string) string {
-	raw = strings.TrimSpace(strings.ToLower(raw))
-	switch raw {
-	case "openai", "anthropic", "hermes", "ollama", "vllm", "custom":
-		return raw
-	default:
-		return raw
-	}
+	return strings.TrimSpace(strings.ToLower(raw))
 }

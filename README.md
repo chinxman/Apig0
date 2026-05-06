@@ -30,9 +30,14 @@ Apig0 is a Go-based gateway for teams that need real user-level controls in fron
 - AI access through OpenAI-compatible clients with gateway-side service, provider, and model scoping.
 - Rate limiting, upstream auth injection, one-time key delivery, and per-route policy enforcement in the gateway layer.
 
+## Development Note
+
+Apig0 is maintained by the project owner with Codex assistance. The current codebase was reviewed collaboratively for gateway behavior, security boundaries, repository hygiene, and documentation coherence.
+
 ## Contents
 
 - [Why Apig0](#why-apig0)
+- [Development Note](#development-note)
 - [Current Product Shape](#current-product-shape)
 - [Route Map](#route-map)
 - [Web UI](#web-ui)

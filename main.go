@@ -9,7 +9,9 @@
 package main
 
 import (
+	"embed"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -25,6 +27,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+//go:embed webui.html
+var embeddedWebUI []byte
+
+//go:embed static
+var embeddedStatic embed.FS
 
 func main() {
 	if cli.ShouldSilenceBootstrapLogs(os.Args[1:]) {
@@ -62,12 +70,16 @@ func main() {
 	// Auth is enforced per-route: SessionMiddleware on proxy + admin endpoints.
 	r.Use(middleware.Cors())
 	r.Use(mon.Middleware())
-	r.Static("/static", "./static")
+	staticFS, err := fs.Sub(embeddedStatic, "static")
+	if err != nil {
+		log.Fatalf("[startup] failed to prepare embedded static assets: %v", err)
+	}
+	r.StaticFS("/static", http.FS(staticFS))
 
 	// Unified WebUI — login overlay gates access, role determines visible panels.
 	// Admin data still requires AdminMiddleware on /api/admin/*.
 	r.GET("/", func(c *gin.Context) {
-		c.File("webui.html")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", embeddedWebUI)
 	})
 	r.GET("/dashboard", func(c *gin.Context) {
 		c.Redirect(301, "/")
@@ -302,9 +314,10 @@ func main() {
 	} else {
 		addr := ":" + port
 		webUIHost := advertisedHost()
-		_ = addr
 		logStartupSummary("http", webUIHost, port, tlsCfg)
-		r.Run(addr)
+		if err := r.Run(addr); err != nil {
+			log.Fatalf("[http] failed to start: %v", err)
+		}
 	}
 }
 

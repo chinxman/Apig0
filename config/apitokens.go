@@ -183,11 +183,12 @@ func CreateAPIToken(params APITokenCreateParams) (string, APIToken, error) {
 }
 
 func RevokeAPIToken(id string) error {
-	apiTokenMu.Lock()
-	defer apiTokenMu.Unlock()
+	id = strings.TrimSpace(id)
 
-	record, ok := apiTokenData[strings.TrimSpace(id)]
+	apiTokenMu.Lock()
+	record, ok := apiTokenData[id]
 	if !ok {
+		apiTokenMu.Unlock()
 		return os.ErrNotExist
 	}
 	if record.RevokedAt.IsZero() {
@@ -195,8 +196,10 @@ func RevokeAPIToken(id string) error {
 		apiTokenData[record.ID] = record
 	}
 	if err := saveAPITokensLocked(); err != nil {
+		apiTokenMu.Unlock()
 		return err
 	}
+	apiTokenMu.Unlock()
 	return DeletePendingAPITokenDeliveriesByTokenID(record.ID)
 }
 
@@ -280,7 +283,7 @@ func saveAPITokensLocked() error {
 		return err
 	}
 	path := apiTokensFilePath()
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil && filepath.Dir(path) != "." {
+	if err := ensureParentDir(path); err != nil {
 		return err
 	}
 	return os.WriteFile(path, raw, 0600)

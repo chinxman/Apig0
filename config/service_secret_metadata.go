@@ -125,7 +125,7 @@ func saveServiceSecretMetadataLocked() error {
 		return err
 	}
 	path := serviceSecretMetadataPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil && filepath.Dir(path) != "." {
+	if err := ensureParentDir(path); err != nil {
 		return err
 	}
 	return os.WriteFile(path, raw, 0600)

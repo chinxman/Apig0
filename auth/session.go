@@ -198,15 +198,23 @@ func SessionMiddleware() gin.HandlerFunc {
 	}
 }
 
-// AdminMiddleware requires a valid session AND admin role.
-// Returns 403 if the user is authenticated but not an admin.
+// AdminMiddleware requires a browser session and admin role.
+// API tokens are intentionally rejected here so admin writes remain tied to
+// the CSRF-protected Web UI session path.
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user, _, ok := authenticateRequest(c)
+		tok, err := c.Cookie("apig0_session")
+		if err != nil || tok == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		user, ok := ValidateSession(tok)
 		if !ok || user == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			return
 		}
+		c.Set("session_user", user)
+		c.Set("auth_source", "session")
 
 		if config.GetUserStore() != nil && config.GetUserStore().GetRole(user) != "admin" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
@@ -218,7 +226,7 @@ func AdminMiddleware() gin.HandlerFunc {
 
 // IsSecure returns true when the gateway should set Secure cookies.
 // Looks at APIG0_SECURE env var ("true"/"false"). Defaults to false
-// since TLS is not yet configured — set APIG0_SECURE=true once TLS is added.
+// for local HTTP; main sets APIG0_SECURE=true when TLS is active.
 func IsSecure() bool {
 	if v := os.Getenv("APIG0_SECURE"); strings.EqualFold(v, "true") {
 		return true
