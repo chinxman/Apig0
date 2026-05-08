@@ -8,14 +8,14 @@ Generated: 2026-05-08
 
 ## Decision Basis
 
-The local clean Apig0 repository meets the requested gate for internal security review in this pass:
+The local clean Apig0 repository remains ready for internal security review in this pass:
 
 - `gitleaks` is clean
 - `grype` is clean
 - `govulncheck` is clean
 - `go test ./...` passes
 - `go vet ./...` passes
-- the 8 remaining Semgrep findings are classified and documented
+- Semgrep cookie hardening reduced the remaining Semgrep findings from 8 to 5
 
 ## Current Evidence Summary
 
@@ -23,16 +23,16 @@ The local clean Apig0 repository meets the requested gate for internal security 
 - `security/evidence/scans/govulncheck.txt`: no vulnerabilities found
 - `security/evidence/scans/go-test.txt`: pass
 - `security/evidence/scans/go-vet.txt`: pass
-- `security/evidence/scans/semgrep.json`: 8 findings remain and are classified
-- `security/reports/finding-classification.md`: updated classification of each remaining Semgrep finding
+- `security/evidence/scans/semgrep.json`: 5 findings remain
+- `security/reports/finding-classification.md`: updated classification of the remaining Semgrep findings
 
 ## Remaining Semgrep Risk Posture
 
 - 2 findings are classified as `False positive`
 - 3 findings are classified as `Accepted risk`
-- 3 findings are classified as `Needs future hardening`
-- 0 findings are classified as `Fixed` in this pass because no code patch was required to complete the requested review
+- 0 findings remain in `Needs future hardening`
+- 3 findings were fixed in this pass
 
 ## Readiness Statement
 
-Apig0 is ready for internal security review based on the current clean-scan state and the documented treatment of the remaining Semgrep findings. This status is an internal security-readiness statement only. It does not claim formal compliance, independent audit approval, or absence of all security risk.
+Apig0 remains ready for internal security review based on the current clean-scan state and the narrower remaining Semgrep set. This status is an internal security-readiness statement only. It does not claim formal compliance, independent audit approval, or absence of all security risk.

@@ -4,25 +4,27 @@ Generated: 2026-05-08
 
 ## Scope Of This Update
 
-This pass made no code changes. The work was limited to reviewing `security/evidence/scans/semgrep.json`, classifying the eight remaining Semgrep findings, and updating readiness documentation for the local clean repository.
+This pass applied narrow cookie-hardening changes to the session and CSRF cookie constructors, added focused regression tests, and regenerated the Semgrep evidence for the local clean repository.
 
 ## Code Patch Status
 
-- No application patches were applied in this pass.
-- No dependency changes were applied in this pass.
-- No security behavior changed in this pass.
+- `auth/session.go`
+  Added a default-secure session-cookie constructor. Session cookies now set `Secure: true` by default, keep `HttpOnly: true`, preserve `SameSite=Strict`, and only allow insecure cookies when local development explicitly opts in with `APIG0_INSECURE_COOKIES=true` or `APIG0_SECURE=false`.
+- `middleware/csrf.go`
+  Added a default-secure CSRF-cookie constructor. The CSRF cookie now sets `Secure: true` by default, preserves `SameSite=Strict`, and keeps `HttpOnly: false` because JavaScript must read the token for the existing double-submit header flow.
+- `auth/session_cookie_test.go`
+  Added regression coverage for secure-by-default session cookies, explicit insecure local-development mode, and session-cookie clearing behavior.
+- `middleware/csrf_test.go`
+  Added regression coverage for secure-by-default CSRF cookies and explicit insecure local-development mode.
 
 ## Validation State Used For Readiness
 
-- `gitleaks`: clean (`security/evidence/scans/gitleaks.txt`)
-- `grype`: 0 matches per current evidence state for this clean repo
-- `govulncheck`: no vulnerabilities found (`security/evidence/scans/govulncheck.txt`)
 - `go test ./...`: pass
 - `go vet ./...`: pass
-- `semgrep`: 8 remaining findings, all classified in `security/reports/finding-classification.md`
+- `semgrep`: 5 remaining findings after cookie hardening
 
-## Remaining Security Work
+## Security Impact
 
-- Decide whether to tighten cookie behavior for any non-TLS deployment mode.
-- Decide whether the generic exec vault should remain enabled in all deployment profiles or be restricted further.
-- Retain the current risk treatment for the provider CLI integrations unless deployment requirements change.
+- Eliminated 3 Semgrep cookie `Secure` findings.
+- Preserved local HTTP development with an explicit opt-out instead of an insecure default.
+- Left the intentional CSRF `HttpOnly` design tradeoff documented and tested rather than weakening the existing CSRF pattern.

@@ -268,39 +268,42 @@ func isAdminUser(user string) bool {
 }
 
 // IsSecure returns true when the gateway should set Secure cookies.
-// Looks at APIG0_SECURE env var ("true"/"false"). Defaults to false
-// for local HTTP; main sets APIG0_SECURE=true when TLS is active.
+// Secure cookies are the default. Local HTTP development can opt out
+// explicitly by setting APIG0_INSECURE_COOKIES=true or APIG0_SECURE=false.
 func IsSecure() bool {
-	if v := os.Getenv("APIG0_SECURE"); strings.EqualFold(v, "true") {
-		return true
+	if v := os.Getenv("APIG0_INSECURE_COOKIES"); strings.EqualFold(v, "true") {
+		return false
 	}
-	return false
+	if v := strings.TrimSpace(os.Getenv("APIG0_SECURE")); v != "" {
+		return !strings.EqualFold(v, "false")
+	}
+	return true
+}
+
+func newSessionCookie(value string, maxAge int) *http.Cookie {
+	cookie := &http.Cookie{
+		Name:     "apig0_session",
+		Value:    value,
+		Path:     "/",
+		MaxAge:   maxAge,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
+	if !IsSecure() {
+		cookie.Secure = false
+	}
+	return cookie
 }
 
 // SetSessionCookie writes the session cookie with Secure + SameSite=Strict.
 func SetSessionCookie(c *gin.Context, tok string) {
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "apig0_session",
-		Value:    tok,
-		Path:     "/",
-		MaxAge:   int(SessionTTL().Seconds()),
-		Secure:   IsSecure(),
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	})
+	http.SetCookie(c.Writer, newSessionCookie(tok, int(SessionTTL().Seconds())))
 }
 
 // ClearSessionCookie removes the session cookie.
 func ClearSessionCookie(c *gin.Context) {
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "apig0_session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		Secure:   IsSecure(),
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	})
+	http.SetCookie(c.Writer, newSessionCookie("", -1))
 }
 
 func randHex(n int) string {

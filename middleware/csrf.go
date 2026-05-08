@@ -13,6 +13,22 @@ import (
 const csrfTokenHeader = "X-CSRF-Token"
 const csrfCookieName = "apig0_csrf"
 
+func newCSRFCookie(value string) *http.Cookie {
+	cookie := &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   86400,
+		Secure:   true,
+		HttpOnly: false, // JS must read the cookie for the double-submit header flow.
+		SameSite: http.SameSiteStrictMode,
+	}
+	if !auth.IsSecure() {
+		cookie.Secure = false
+	}
+	return cookie
+}
+
 // CSRF implements double-submit cookie pattern.
 // On every response, a random CSRF token is set as a non-HttpOnly cookie
 // (so JS can read it). On state-changing requests (POST/PUT/DELETE/PATCH),
@@ -25,16 +41,8 @@ func CSRF() gin.HandlerFunc {
 		if err != nil || tok == "" {
 			tok = csrfRandHex(32)
 		}
-		// Non-HttpOnly so JS can read it; Secure + SameSite=Strict
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     csrfCookieName,
-			Value:    tok,
-			Path:     "/",
-			MaxAge:   86400,
-			Secure:   auth.IsSecure(),
-			HttpOnly: false, // must be readable by JS
-			SameSite: http.SameSiteStrictMode,
-		})
+		// Non-HttpOnly so JS can read it and mirror it into X-CSRF-Token.
+		http.SetCookie(c.Writer, newCSRFCookie(tok))
 
 		// Safe methods — no check needed
 		switch c.Request.Method {
