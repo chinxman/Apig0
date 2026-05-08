@@ -15,7 +15,7 @@ The local clean Apig0 repository remains ready for internal security review in t
 - `govulncheck` is clean
 - `go test ./...` passes
 - `go vet ./...` passes
-- Semgrep cookie hardening reduced the remaining Semgrep findings from 8 to 5
+- Semgrep hardening reduced the remaining Semgrep findings from 8 to 4
 
 ## Current Evidence Summary
 
@@ -23,15 +23,15 @@ The local clean Apig0 repository remains ready for internal security review in t
 - `security/evidence/scans/govulncheck.txt`: no vulnerabilities found
 - `security/evidence/scans/go-test.txt`: pass
 - `security/evidence/scans/go-vet.txt`: pass
-- `security/evidence/scans/semgrep.json`: 5 findings remain
+- `security/evidence/scans/semgrep.json`: 4 findings remain
 - `security/reports/finding-classification.md`: updated classification of the remaining Semgrep findings
 
 ## Remaining Semgrep Risk Posture
 
-- 2 findings are classified as `False positive`
+- 1 finding is classified as `False positive`
 - 3 findings are classified as `Accepted risk`
 - 0 findings remain in `Needs future hardening`
-- 3 findings were fixed in this pass
+- 4 findings were fixed in this pass
 
 ## Readiness Statement
 

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -121,18 +120,23 @@ func runStart(args []string) int {
 	}
 	_ = monitorFile.Close()
 
-	cmd := exec.Command(exe, "serve")
-	cmd.Dir, _ = os.Getwd()
-	cmd.Env = append(os.Environ(), "APIG0_BACKGROUND=1")
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Start(); err != nil {
+	cmdArgs := []string{exe, "serve"}
+	cmdDir, _ := os.Getwd()
+	process, err := os.StartProcess(exe, cmdArgs, &os.ProcAttr{
+		Dir: cmdDir,
+		Env: append(os.Environ(), "APIG0_BACKGROUND=1"),
+		Files: []*os.File{
+			nil,
+			logFile,
+			logFile,
+		},
+		Sys: &syscall.SysProcAttr{Setsid: true},
+	})
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "background start failed: %v\n", err)
 		return 1
 	}
-	if err := writePIDFile(cmd.Process.Pid); err != nil {
+	if err := writePIDFile(process.Pid); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not write pid file: %v\n", err)
 	}
 
@@ -143,7 +147,7 @@ func runStart(args []string) int {
 	status := config.GetRuntimeStatus()
 	host := advertisedHost()
 
-	fmt.Printf("apig0 started in background (pid=%d)\n", cmd.Process.Pid)
+	fmt.Printf("apig0 started in background (pid=%d)\n", process.Pid)
 	fmt.Printf("url: %s://%s:%s/\n", scheme, host, status.Port)
 	fmt.Printf("setup: %s\n", status.SetupMode)
 	fmt.Printf("log_file: %s\n", *logPath)
