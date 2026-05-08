@@ -25,17 +25,17 @@ func NewReverseProxy(service config.ServiceConfig) gin.HandlerFunc {
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		strippedPath, strippedRawPath := rewriteProxyPath(req, service.Name)
-		originalDirector(req)
-		req.URL.Path = joinProxyPath(u.Path, strippedPath)
+	proxy.Rewrite = func(req *httputil.ProxyRequest) {
+		strippedPath, strippedRawPath := rewriteProxyPath(req.In, service.Name)
+		req.SetURL(u)
+		req.Out.URL.Path = joinProxyPath(u.Path, strippedPath)
 		if strippedRawPath != "" {
-			req.URL.RawPath = joinProxyPath(u.EscapedPath(), strippedRawPath)
+			req.Out.URL.RawPath = joinProxyPath(u.EscapedPath(), strippedRawPath)
 		} else {
-			req.URL.RawPath = ""
+			req.Out.URL.RawPath = ""
 		}
-		applyServiceAuth(req, service)
+		req.SetXForwarded()
+		applyServiceAuth(req.Out, service)
 	}
 	proxy.Transport = newRetryTransport(service)
 	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
@@ -43,7 +43,6 @@ func NewReverseProxy(service config.ServiceConfig) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		c.Request.Header.Set("X-Forwarded-For", c.ClientIP())
 		timeout := time.Duration(service.TimeoutMS) * time.Millisecond
 		if timeout <= 0 {
 			timeout = 10 * time.Second

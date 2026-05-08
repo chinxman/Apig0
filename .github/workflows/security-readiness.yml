@@ -1,0 +1,340 @@
+name: Security Readiness
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security-readiness:
+    name: Security Readiness Baseline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        if: ${{ hashFiles('go.mod') != '' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.3"
+          cache: true
+
+      - name: Prepare evidence directories
+        shell: bash
+        run: |
+          mkdir -p security/evidence/scans security/evidence/sbom security/evidence/patches security/reports
+          {
+            echo "# Commands Log"
+            echo
+            echo "Operator: GitHub Actions"
+            echo "Environment: $GITHUB_WORKFLOW on $RUNNER_OS"
+            echo "Branch: ${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            echo "Commit: $GITHUB_SHA"
+            echo
+            echo "| Timestamp UTC | Command or tool | Purpose | Result | Evidence |"
+            echo "| --- | --- | --- | --- | --- |"
+          } > security/evidence/commands.log
+          touch security/evidence/scans/security-gates.env
+          {
+            echo "# Tooling Gaps"
+            echo
+            echo "| Tool | Expected use | Status | Reason | Recommended action |"
+            echo "| --- | --- | --- | --- | --- |"
+          } > security/reports/tooling-gaps.md
+
+      - name: Detect project type
+        shell: bash
+        run: |
+          detected=()
+          [[ -f go.mod ]] && detected+=("go")
+          [[ -f package-lock.json || -f package.json ]] && detected+=("node")
+          [[ -f pyproject.toml || -f requirements.txt ]] && detected+=("python")
+          [[ -f Dockerfile ]] && detected+=("docker")
+          if [[ ${#detected[@]} -eq 0 ]]; then
+            detected+=("unknown")
+          fi
+          printf '%s\n' "${detected[@]}" > security/evidence/scans/project-types.txt
+          echo "Detected project types: ${detected[*]}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run Go tests
+        if: ${{ hashFiles('go.mod') != '' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          go test ./... 2>&1 | tee security/evidence/scans/go-test.txt
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | go test ./... | Go tests | Completed | security/evidence/scans/go-test.txt |" >> security/evidence/commands.log
+
+      - name: Run Go vet
+        if: ${{ hashFiles('go.mod') != '' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          go vet ./... 2>&1 | tee security/evidence/scans/go-vet.txt
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | go vet ./... | Go static vetting | Completed | security/evidence/scans/go-vet.txt |" >> security/evidence/commands.log
+
+      - name: Run govulncheck if available
+        if: ${{ hashFiles('go.mod') != '' }}
+        shell: bash
+        continue-on-error: true
+        run: |
+          if ! command -v govulncheck >/dev/null 2>&1; then
+            go install golang.org/x/vuln/cmd/govulncheck@latest >/tmp/govulncheck-install.log 2>&1 || true
+          fi
+          if command -v govulncheck >/dev/null 2>&1; then
+            govulncheck ./... > security/evidence/scans/govulncheck.txt 2>&1
+            result="Completed"
+          else
+            result="Skipped"
+            {
+              echo
+              echo "| govulncheck | Go vulnerability scanning | Skipped | Tool unavailable in workflow | Install golang.org/x/vuln/cmd/govulncheck or inspect install log |"
+            } >> security/reports/tooling-gaps.md
+            cp /tmp/govulncheck-install.log security/evidence/scans/govulncheck-install.log 2>/dev/null || true
+          fi
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | govulncheck ./... | Go vulnerability scanning | $result | security/evidence/scans/govulncheck.txt |" >> security/evidence/commands.log
+
+      - name: Run Node checks if present
+        if: ${{ hashFiles('package.json') != '' }}
+        shell: bash
+        continue-on-error: true
+        run: |
+          if [[ -f package-lock.json ]]; then
+            npm ci
+            npm audit --audit-level=high --json > security/evidence/scans/npm-audit.json 2>&1 || echo "NPM_AUDIT_FAIL=true" >> security/evidence/scans/security-gates.env
+          else
+            echo "package-lock.json missing; npm audit skipped" > security/evidence/scans/npm-audit.txt
+          fi
+          if npm run | grep -q '^  test'; then
+            npm test 2>&1 | tee security/evidence/scans/npm-test.txt
+          fi
+
+      - name: Run Python checks if present
+        if: ${{ hashFiles('pyproject.toml') != '' || hashFiles('requirements.txt') != '' }}
+        shell: bash
+        continue-on-error: true
+        run: |
+          python -m pip install --upgrade pip >/tmp/python-security-install.log 2>&1 || true
+          python -m pip install pytest bandit pip-audit >>/tmp/python-security-install.log 2>&1 || true
+          if command -v pytest >/dev/null 2>&1; then
+            pytest 2>&1 | tee security/evidence/scans/pytest.txt
+          fi
+          if command -v bandit >/dev/null 2>&1; then
+            bandit -r . -f json -o security/evidence/scans/bandit.json || true
+          fi
+          if command -v pip-audit >/dev/null 2>&1; then
+            pip-audit -f json -o security/evidence/scans/pip-audit.json || true
+          fi
+
+      - name: Install gitleaks if needed
+        shell: bash
+        continue-on-error: true
+        run: |
+          if ! command -v gitleaks >/dev/null 2>&1; then
+            go install github.com/gitleaks/gitleaks/v8@latest >/tmp/gitleaks-install.log 2>&1 || true
+          fi
+          if ! command -v gitleaks >/dev/null 2>&1; then
+            {
+              echo
+              echo "| gitleaks | Secret scanning | Skipped | Tool unavailable in workflow | Install gitleaks or inspect install log |"
+            } >> security/reports/tooling-gaps.md
+            cp /tmp/gitleaks-install.log security/evidence/scans/gitleaks-install.log 2>/dev/null || true
+          fi
+
+      - name: Run gitleaks
+        shell: bash
+        continue-on-error: true
+        run: |
+          if command -v gitleaks >/dev/null 2>&1; then
+            gitleaks detect --source . --report-format sarif --report-path security/evidence/scans/gitleaks.sarif --redact --exit-code 2 > security/evidence/scans/gitleaks.txt 2>&1
+            code=$?
+            if [[ $code -eq 2 ]]; then
+              echo "GITLEAKS_FAIL=true" >> security/evidence/scans/security-gates.env
+              result="Findings"
+            elif [[ $code -eq 0 ]]; then
+              result="Completed"
+            else
+              result="Tool error"
+            fi
+          else
+            echo "gitleaks unavailable" > security/evidence/scans/gitleaks.txt
+            result="Skipped"
+          fi
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | gitleaks detect | Secret scanning | $result | security/evidence/scans/gitleaks.txt |" >> security/evidence/commands.log
+
+      - name: Install semgrep if needed
+        shell: bash
+        continue-on-error: true
+        run: |
+          if ! command -v semgrep >/dev/null 2>&1; then
+            python -m pip install semgrep >/tmp/semgrep-install.log 2>&1 || true
+          fi
+          if ! command -v semgrep >/dev/null 2>&1; then
+            {
+              echo
+              echo "| semgrep | SAST | Skipped | Tool unavailable in workflow | Install semgrep or inspect install log |"
+            } >> security/reports/tooling-gaps.md
+            cp /tmp/semgrep-install.log security/evidence/scans/semgrep-install.log 2>/dev/null || true
+          fi
+
+      - name: Run semgrep
+        shell: bash
+        continue-on-error: true
+        run: |
+          if command -v semgrep >/dev/null 2>&1; then
+            semgrep scan --config p/ci --sarif --output security/evidence/scans/semgrep.sarif . > security/evidence/scans/semgrep.txt 2>&1
+            result="Completed"
+          else
+            echo "semgrep unavailable" > security/evidence/scans/semgrep.txt
+            result="Skipped"
+          fi
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | semgrep scan --config p/ci | SAST | $result | security/evidence/scans/semgrep.sarif |" >> security/evidence/commands.log
+
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@v0.2.6
+        continue-on-error: true
+
+      - name: Run Trivy filesystem scan
+        shell: bash
+        continue-on-error: true
+        run: |
+          if command -v trivy >/dev/null 2>&1; then
+            trivy fs --format sarif --output security/evidence/scans/trivy-fs.sarif --severity HIGH,CRITICAL --exit-code 1 . > security/evidence/scans/trivy-fs.txt 2>&1
+            code=$?
+            if [[ $code -eq 1 ]]; then
+              echo "TRIVY_HIGH_CRITICAL_FAIL=true" >> security/evidence/scans/security-gates.env
+              result="High or critical findings"
+            elif [[ $code -eq 0 ]]; then
+              result="Completed"
+            else
+              result="Tool error"
+            fi
+          else
+            echo "trivy unavailable" > security/evidence/scans/trivy-fs.txt
+            result="Skipped"
+            {
+              echo
+              echo "| trivy | Filesystem/container/dependency scanning | Skipped | Tool unavailable in workflow | Install trivy or inspect setup output |"
+            } >> security/reports/tooling-gaps.md
+          fi
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | trivy fs | Filesystem vulnerability scanning | $result | security/evidence/scans/trivy-fs.sarif |" >> security/evidence/commands.log
+
+      - name: Generate SBOM with syft if available
+        shell: bash
+        continue-on-error: true
+        run: |
+          if ! command -v syft >/dev/null 2>&1; then
+            curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$HOME/.local/bin" >/tmp/syft-install.log 2>&1 || true
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          if command -v syft >/dev/null 2>&1; then
+            syft . -o spdx-json=security/evidence/sbom/sbom.spdx.json > security/evidence/sbom/syft.txt 2>&1
+            result="Completed"
+          else
+            result="Skipped"
+            {
+              echo
+              echo "| syft | SBOM generation | Skipped | Tool unavailable in workflow | Install syft or inspect install log |"
+            } >> security/reports/tooling-gaps.md
+            cp /tmp/syft-install.log security/evidence/sbom/syft-install.log 2>/dev/null || true
+          fi
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | syft . | SBOM generation | $result | security/evidence/sbom/sbom.spdx.json |" >> security/evidence/commands.log
+
+      - name: Run grype if available
+        shell: bash
+        continue-on-error: true
+        run: |
+          if ! command -v grype >/dev/null 2>&1; then
+            curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b "$HOME/.local/bin" >/tmp/grype-install.log 2>&1 || true
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          if command -v grype >/dev/null 2>&1; then
+            grype . -o sarif --fail-on high > security/evidence/scans/grype.sarif 2> security/evidence/scans/grype.txt
+            code=$?
+            if [[ $code -ne 0 ]]; then
+              echo "GRYPE_HIGH_FAIL=true" >> security/evidence/scans/security-gates.env
+              result="High or critical findings"
+            else
+              result="Completed"
+            fi
+          else
+            result="Skipped"
+            echo "grype unavailable" > security/evidence/scans/grype.txt
+            {
+              echo
+              echo "| grype | Vulnerability matching | Skipped | Tool unavailable in workflow | Install grype or inspect install log |"
+            } >> security/reports/tooling-gaps.md
+          fi
+          echo "| $(date -u +%Y-%m-%dT%H:%M:%SZ) | grype . | Vulnerability matching | $result | security/evidence/scans/grype.sarif |" >> security/evidence/commands.log
+
+      - name: Upload gitleaks SARIF
+        if: ${{ always() && hashFiles('security/evidence/scans/gitleaks.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: security/evidence/scans/gitleaks.sarif
+          category: gitleaks
+
+      - name: Upload semgrep SARIF
+        if: ${{ always() && hashFiles('security/evidence/scans/semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: security/evidence/scans/semgrep.sarif
+          category: semgrep
+
+      - name: Upload trivy SARIF
+        if: ${{ always() && hashFiles('security/evidence/scans/trivy-fs.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: security/evidence/scans/trivy-fs.sarif
+          category: trivy-fs
+
+      - name: Write security readiness summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Security Readiness"
+            echo
+            echo "- Branch: ${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Evidence: security/evidence/"
+            echo "- Reports: security/reports/"
+            echo
+            echo "### Gates"
+            if [[ -s security/evidence/scans/security-gates.env ]]; then
+              cat security/evidence/scans/security-gates.env
+            else
+              echo "No high/critical or secret gates triggered by available checks."
+            fi
+            echo
+            echo "### Tooling Gaps"
+            cat security/reports/tooling-gaps.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload security evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-readiness-evidence
+          path: |
+            security/evidence/**
+            security/reports/**
+          if-no-files-found: warn
+
+      - name: Enforce high or critical security gates
+        shell: bash
+        run: |
+          if grep -q '=true' security/evidence/scans/security-gates.env; then
+            echo "One or more security gates failed. See security/evidence/scans/security-gates.env."
+            cat security/evidence/scans/security-gates.env
+            exit 1
+          fi

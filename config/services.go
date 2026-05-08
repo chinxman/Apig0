@@ -2,6 +2,9 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -283,6 +286,9 @@ func normalizeServiceConfig(svc ServiceConfig) (ServiceConfig, bool) {
 	if svc.Name == "" || svc.BaseURL == "" {
 		return ServiceConfig{}, false
 	}
+	if ValidateServiceBaseURL(svc.BaseURL) != nil {
+		return ServiceConfig{}, false
+	}
 	switch svc.AuthType {
 	case ServiceAuthNone, ServiceAuthBearer, ServiceAuthXAPIKey, ServiceAuthCustomHeader, ServiceAuthBasic:
 	default:
@@ -307,6 +313,31 @@ func normalizeServiceConfig(svc ServiceConfig) (ServiceConfig, bool) {
 		svc.RetryCount = 3
 	}
 	return svc, true
+}
+
+func ValidateServiceBaseURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return errors.New("base URL is required")
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("base URL is invalid: %w", err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return errors.New("base URL must be an absolute http or https URL")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("base URL scheme must be http or https")
+	}
+	if u.User != nil {
+		return errors.New("base URL must not include credentials")
+	}
+	if strings.TrimSpace(u.Fragment) != "" {
+		return errors.New("base URL must not include a fragment")
+	}
+	return nil
 }
 
 func NormalizeProviderName(raw string) string {

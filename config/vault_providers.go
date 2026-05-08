@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -220,6 +221,9 @@ type CLIVault struct {
 
 func (v *CLIVault) LoadSecret(secretPath, key string) (string, error) {
 	bin, args := v.buildCmd(secretPath, key)
+	if err := validateExecBinary(bin, allowedProviderBinaries); err != nil {
+		return "", fmt.Errorf("%s: %w", v.name, err)
+	}
 	cmd := exec.Command(bin, args...)
 	out, err := cmd.Output()
 	if err != nil {
@@ -236,6 +240,9 @@ func (v *CLIVault) Health() error {
 		return nil
 	}
 	bin, args := v.checkCmd()
+	if err := validateExecBinary(bin, allowedProviderBinaries); err != nil {
+		return fmt.Errorf("%s health: %w", v.name, err)
+	}
 	out, err := exec.Command(bin, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s health: %s", v.name, strings.TrimSpace(string(out)))
@@ -632,6 +639,7 @@ func (v *HTTPVault) String() string { return "http" }
 
 type ExecVault struct {
 	commandTemplate string
+	commandTokens   []string
 }
 
 func NewExecVault(cfg *VaultConfig) (*ExecVault, error) {
@@ -639,12 +647,25 @@ func NewExecVault(cfg *VaultConfig) (*ExecVault, error) {
 	if cmdTpl == "" {
 		return nil, fmt.Errorf("VAULT_EXEC_COMMAND is required (use {{path}} and {{key}} placeholders)")
 	}
-	return &ExecVault{commandTemplate: cmdTpl}, nil
+	commandTokens, err := parseExecCommandTemplate(cmdTpl)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecVault{
+		commandTemplate: cmdTpl,
+		commandTokens:   commandTokens,
+	}, nil
 }
 
 func (v *ExecVault) LoadSecret(secretPath string, key string) (string, error) {
-	cmdStr := templateReplace(v.commandTemplate, secretPath, key)
-	cmd := exec.Command("sh", "-c", cmdStr)
+	cmdTokens := templateReplaceArgs(v.commandTokens, secretPath, key)
+	if len(cmdTokens) == 0 {
+		return "", fmt.Errorf("exec command resolved to empty command")
+	}
+	if err := validateExecBinary(cmdTokens[0], nil); err != nil {
+		return "", err
+	}
+	cmd := exec.Command(cmdTokens[0], cmdTokens[1:]...)
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -675,6 +696,13 @@ func (v *ExecVault) String() string { return "exec" }
 // Shared utilities
 // ===================================================================
 
+var allowedProviderBinaries = map[string]struct{}{
+	"aws":    {},
+	"az":     {},
+	"gcloud": {},
+	"op":     {},
+}
+
 // envDefault reads an env var with a fallback.
 func envDefault(key, fallback string) string {
 	if val := os.Getenv(key); val != "" {
@@ -690,16 +718,72 @@ func templateReplace(tpl, secretPath, key string) string {
 	return s
 }
 
+func templateReplaceArgs(args []string, secretPath, key string) []string {
+	resolved := make([]string, 0, len(args))
+	for _, arg := range args {
+		resolved = append(resolved, templateReplace(arg, secretPath, key))
+	}
+	return resolved
+}
+
+func parseExecCommandTemplate(raw string) ([]string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, fmt.Errorf("VAULT_EXEC_COMMAND must not be empty")
+	}
+
+	if strings.HasPrefix(trimmed, "[") {
+		var tokens []string
+		if err := json.Unmarshal([]byte(trimmed), &tokens); err != nil {
+			return nil, fmt.Errorf("VAULT_EXEC_COMMAND JSON array is invalid: %w", err)
+		}
+		if len(tokens) == 0 {
+			return nil, fmt.Errorf("VAULT_EXEC_COMMAND JSON array must include a command")
+		}
+		return tokens, nil
+	}
+
+	if strings.ContainsAny(trimmed, "|&;<>()$`\\\n\r'\"") {
+		return nil, fmt.Errorf("VAULT_EXEC_COMMAND contains shell metacharacters; use a JSON array such as [\"/usr/bin/tool\",\"get\",\"{{path}}\",\"{{key}}\"]")
+	}
+
+	tokens := strings.Fields(trimmed)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("VAULT_EXEC_COMMAND must include a command")
+	}
+	return tokens, nil
+}
+
+func validateExecBinary(bin string, allowlist map[string]struct{}) error {
+	trimmed := strings.TrimSpace(bin)
+	if trimmed == "" {
+		return fmt.Errorf("command binary is empty")
+	}
+	if strings.ContainsAny(trimmed, "|&;<>()$`\\\n\r") {
+		return fmt.Errorf("command binary contains invalid shell metacharacters")
+	}
+	base := filepath.Base(trimmed)
+	if allowlist != nil {
+		if _, ok := allowlist[base]; !ok {
+			return fmt.Errorf("command binary %q is not in the allowed provider list", base)
+		}
+	}
+	if _, err := exec.LookPath(trimmed); err != nil {
+		return fmt.Errorf("command binary %q not found in PATH", trimmed)
+	}
+	return nil
+}
+
 // extractJSONPath traverses a JSON object using dot-notation.
 // e.g. "data.value" extracts obj["data"]["value"]
 func extractJSONPath(raw []byte, path string) (string, error) {
-	var obj interface{}
+	var obj map[string]any
 	if err := json.Unmarshal(raw, &obj); err != nil {
 		return "", fmt.Errorf("json parse: %w", err)
 	}
 
 	parts := strings.Split(path, ".")
-	current := obj
+	var current any = obj
 	for _, part := range parts {
 		m, ok := current.(map[string]interface{})
 		if !ok {

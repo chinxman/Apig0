@@ -93,6 +93,11 @@ func runStart(args []string) int {
 		fmt.Fprintf(os.Stderr, "resolve executable failed: %v\n", err)
 		return 1
 	}
+	exe, err = validateBackgroundExecutable(exe)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "resolve executable failed: %v\n", err)
+		return 1
+	}
 	if err := os.MkdirAll(filepath.Dir(*logPath), 0700); err != nil && filepath.Dir(*logPath) != "." {
 		fmt.Fprintf(os.Stderr, "prepare log path failed: %v\n", err)
 		return 1
@@ -144,6 +149,25 @@ func runStart(args []string) int {
 	fmt.Printf("log_file: %s\n", *logPath)
 	fmt.Println("use `go run main.go logs` to inspect runtime output")
 	return 0
+}
+
+func validateBackgroundExecutable(exe string) (string, error) {
+	exe = strings.TrimSpace(exe)
+	if exe == "" {
+		return "", fmt.Errorf("executable path is empty")
+	}
+	resolved, err := filepath.EvalSymlinks(exe)
+	if err == nil && resolved != "" {
+		exe = resolved
+	}
+	info, err := os.Stat(exe)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("executable path %q is a directory", exe)
+	}
+	return exe, nil
 }
 
 func runLogs(args []string) int {

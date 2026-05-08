@@ -7,6 +7,7 @@
     <a href="#web-ui">Web UI</a>&nbsp;&nbsp;&nbsp;
     <a href="#gateway-tokens">Gateway Tokens</a>&nbsp;&nbsp;&nbsp;
     <a href="#ai-gateway">AI Gateway</a>&nbsp;&nbsp;&nbsp;
+    <a href="#security-readiness">Security Readiness</a>&nbsp;&nbsp;&nbsp;
     <a href="#cli">CLI</a>
   </p>
 </div>
@@ -38,6 +39,7 @@ Apig0 is maintained by the project owner with Codex assistance. The current code
 
 - [Why Apig0](#why-apig0)
 - [Development Note](#development-note)
+- [Security Readiness](#security-readiness)
 - [Current Product Shape](#current-product-shape)
 - [Route Map](#route-map)
 - [Web UI](#web-ui)
@@ -48,6 +50,36 @@ Apig0 is maintained by the project owner with Codex assistance. The current code
 - [Storage Modes](#storage-modes)
 - [File and Package Layout](#file-and-package-layout)
 - [Operator Notes](#operator-notes)
+
+## Security Readiness
+
+![SOC 2 / ISO 27001 Readiness Evidence](https://img.shields.io/badge/SOC%202%20%2F%20ISO%2027001-readiness%20evidence-blue)
+![OWASP API Top 10 Tested](https://img.shields.io/badge/OWASP%20API%20Top%2010-tested%20evidence%20pending-yellow)
+![CVSS Scored Findings](https://img.shields.io/badge/CVSS-scored%20findings%20pending-yellow)
+
+Apig0 maintains a security-readiness evidence package under [`security/`](security). This repository is not officially certified for SOC 2, ISO 27001, or GDPR, and the security materials are not a substitute for an independent audit. The evidence package is intended for educational use, secure SDLC support, security validation, compliance mapping, and audit-review preparation.
+
+The security structure includes:
+
+- [`security/controls/`](security/controls): SOC 2, ISO 27001, NIST CSF, OWASP API Top 10, and OWASP ASVS readiness mappings.
+- [`security/policies/`](security/policies): lightweight startup-friendly security policies.
+- [`security/reports/`](security/reports): pentest report, findings, risk register, remediation plan, and executive summary templates.
+- [`security/evidence/`](security/evidence): command history, evidence index, screenshots, logs, imported artifacts, and bundles.
+- [`security/scripts/`](security/scripts): local-first security check and evidence collection scripts.
+- [`.github/workflows/security-readiness.yml`](.github/workflows/security-readiness.yml): CI workflow for Go tests and optional security tooling.
+
+Advanced validation may use external tooling from a separate `apig0-security-lab` environment. Security validation activities may be performed using external tooling from the `apig0-security-lab` environment, including Vigil and OWASP-aligned scanning utilities. Imported reports must disclose scan origin, tooling used, and whether findings are pending validation.
+
+### External Security Validation Workflow
+
+Apig0 is the product repository. `apig0-security-lab` is the external security validation environment for advanced tooling such as Vigil, OWASP ZAP, Nmap, ffuf, Trivy, Gitleaks, Nikto, OpenSSL, and related utilities. These tools operate externally and are not vendored into this repository.
+
+Only validated and relevant evidence should be imported into Apig0 through [`security/integrations/import-evidence.sh`](security/integrations/import-evidence.sh). This keeps the product repository clean while preserving traceability between scans, findings, remediation work, and compliance mappings. The integration status is currently marked as `Pending external lab initialization`.
+
+Useful environment variables:
+
+- `APIG0_SECURITY_LAB_PATH`: optional path to external lab outputs. Defaults to `../apig0-security-lab/outputs/`.
+- `APIG0_TARGET_URL`: explicit target for local or external validation workflows. Public targets are never scanned by default.
 
 ## Current Product Shape
 
@@ -292,6 +324,7 @@ The current implementation is still centered on an OpenAI-compatible surface, ev
 - [`middleware/`](middleware): CORS, CSRF, rate limiting, monitoring, Prometheus output.
 - [`proxy/`](proxy): reverse proxy behavior, upstream auth injection, timeout/retry handling, OpenAI-compatible AI proxy.
 - [`cli/`](cli): local operator CLI.
+- [`security/`](security): security-readiness evidence, policies, mappings, reports, integrations, and lightweight local scripts.
 
 ### Frontend Files
 

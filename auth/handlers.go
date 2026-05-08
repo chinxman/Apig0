@@ -37,7 +37,6 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	ClearFailures(req.Username)
 	c.JSON(http.StatusOK, gin.H{"challenge": NewChallenge(req.Username)})
 }
 
@@ -65,6 +64,10 @@ func VerifyHandler(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired challenge"})
 		return
 	}
+	if IsLockedOut(user) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked, try again later"})
+		return
+	}
 
 	secret := config.LoadUserSecret(user)
 	if secret == "" {
@@ -74,12 +77,14 @@ func VerifyHandler(c *gin.Context) {
 
 	// Validate TOTP before consuming — wrong code leaves the challenge intact
 	if !ValidateTOTP(user, req.Code, secret) {
+		RecordFailure(user)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid TOTP code"})
 		return
 	}
 
 	// Only consume the challenge once the code is confirmed correct
 	ConsumeChallenge(req.Challenge)
+	ClearFailures(user)
 
 	tok := NewSession(user)
 	SetSessionCookie(c, tok)

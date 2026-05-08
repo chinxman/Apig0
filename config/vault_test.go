@@ -72,3 +72,24 @@ func TestRuntimeStatusReportsTemporaryEnvMode(t *testing.T) {
 		t.Fatal("setup should be inactive once temporary setup is activated")
 	}
 }
+
+func TestParseExecCommandTemplateRejectsShellMetacharacters(t *testing.T) {
+	_, err := parseExecCommandTemplate("sh -c 'tool {{path}}/{{key}}'")
+	if err == nil {
+		t.Fatal("expected shell metacharacters to be rejected")
+	}
+}
+
+func TestParseExecCommandTemplateAcceptsJSONArray(t *testing.T) {
+	args, err := parseExecCommandTemplate(`["/usr/bin/tool","get","{{path}}","{{key}}"]`)
+	if err != nil {
+		t.Fatalf("parse exec template: %v", err)
+	}
+	if len(args) != 4 {
+		t.Fatalf("unexpected arg count: %d", len(args))
+	}
+	resolved := templateReplaceArgs(args, "totp", "alice")
+	if resolved[2] != "totp" || resolved[3] != "alice" {
+		t.Fatalf("unexpected resolved args: %#v", resolved)
+	}
+}

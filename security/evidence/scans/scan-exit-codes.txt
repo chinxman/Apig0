@@ -1,0 +1,9 @@
+go-test exit_code=0
+go-vet exit_code=0
+govulncheck exit_code=0
+semgrep exit_code=0
+trivy-fs exit_code=0
+syft-sbom exit_code=0
+grype exit_code=0
+gitleaks-text exit_code=1
+gitleaks-sarif exit_code=1

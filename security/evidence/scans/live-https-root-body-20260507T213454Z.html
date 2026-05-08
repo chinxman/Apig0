@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apig0 Gateway</title>
+  <link rel="stylesheet" href="/static/css/webui.css">
+</head>
+<body>
+
+  <!-- Login overlay -->
+  <div class="login-overlay" id="login-overlay">
+    <div class="login-card">
+      <h2>Apig0</h2>
+      <div class="login-sub">Sign in to access the gateway</div>
+      <div class="login-step active" id="step-password">
+        <div class="login-field">
+          <label>Username</label>
+          <input type="text" id="login-username" autocomplete="username" placeholder="username">
+        </div>
+        <div class="login-field">
+          <label>Password</label>
+          <input type="password" id="login-password" autocomplete="current-password" placeholder="............">
+        </div>
+        <button class="login-btn" id="btn-password" data-action="submit-password">Continue</button>
+        <div class="login-err" id="err-password"></div>
+      </div>
+      <div class="login-step" id="step-totp">
+        <div class="login-field">
+          <label>Authenticator code</label>
+          <input type="text" id="login-totp" autocomplete="one-time-code" placeholder="000000" maxlength="6" inputmode="numeric">
+        </div>
+        <button class="login-btn" id="btn-totp" data-action="submit-totp">Verify</button>
+        <div class="login-err" id="err-totp"></div>
+        <button class="login-back" data-action="back-to-password">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-overlay" id="setup-overlay">
+    <div class="login-card" style="max-width:700px;margin:0 auto;flex-shrink:0">
+      <h2>Gateway Setup</h2>
+      <div class="login-sub">Configure once. Temporary keeps nothing on disk — persistent survives restarts.</div>
+
+      <!-- Mode -->
+      <div class="mode-bar">
+        <button class="mode-btn active" id="mode-btn-temporary" data-action="select-setup-mode" data-mode="temporary">
+          <strong>Temporary</strong>
+          <span>In-memory only. Restart returns to this wizard. Great for testing.</span>
+        </button>
+        <button class="mode-btn" id="mode-btn-persistent" data-action="select-setup-mode" data-mode="persistent">
+          <strong>Persistent</strong>
+          <span>Saves users and secrets locally so the gateway survives restarts.</span>
+        </button>
+      </div>
+
+      <!-- Persistent-only config -->
+      <div id="setup-persistent-section" style="display:none">
+        <hr class="setup-divider">
+        <div class="setup-section-label">TOTP Secret Storage</div>
+        <div class="vault-chips">
+          <button class="vault-chip active" id="vchip-file" data-action="select-vault" data-vault="file">Local File</button>
+          <button class="vault-chip" id="vchip-hashicorp" data-action="select-vault" data-vault="hashicorp">Hashicorp Vault</button>
+          <button class="vault-chip" id="vchip-aws" data-action="select-vault" data-vault="aws">AWS</button>
+          <button class="vault-chip" id="vchip-gcp" data-action="select-vault" data-vault="gcp">GCP</button>
+          <button class="vault-chip" id="vchip-azure" data-action="select-vault" data-vault="azure">Azure</button>
+          <button class="vault-chip" id="vchip-1password" data-action="select-vault" data-vault="1password">1Password</button>
+        </div>
+        <div id="setup-vault-file-row" style="margin-bottom:10px">
+          <div class="form-field" style="max-width:260px">
+            <label>File Path</label>
+            <input class="form-input" id="setup-vault-file-path" value="totp-secrets.json" placeholder="totp-secrets.json">
+          </div>
+        </div>
+        <div id="setup-vault-hashicorp-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>Vault Address</label><input class="form-input" id="setup-vault-address" placeholder="http://127.0.0.1:8200"></div>
+            <div class="form-field"><label>Engine</label><input class="form-input" id="setup-vault-engine" placeholder="secret"></div>
+          </div>
+        </div>
+        <div id="setup-vault-aws-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>AWS Region</label><input class="form-input" id="setup-aws-region" placeholder="us-east-1"></div>
+            <div class="form-field"><label>AWS Profile</label><input class="form-input" id="setup-aws-profile" placeholder="default"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>Access Key ID</label><input class="form-input" id="setup-aws-access-key-id" placeholder="AKIA..."></div>
+            <div class="form-field"><label>Secret Access Key</label><input class="form-input" type="password" id="setup-aws-secret-access-key" placeholder="optional if host auth already exists"></div>
+          </div>
+          <div class="form-field"><label>Session Token</label><input class="form-input" type="password" id="setup-aws-session-token" placeholder="optional"></div>
+          <div class="inline-note">Uses the `aws` CLI. Region/profile can be stored here. Existing host IAM or CLI auth still works.</div>
+        </div>
+        <div id="setup-vault-gcp-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>GCP Project</label><input class="form-input" id="setup-gcp-project" placeholder="my-project-id"></div>
+            <div class="form-field"><label>Credentials File</label><input class="form-input" id="setup-gcp-creds-file" placeholder="/path/to/service-account.json"></div>
+          </div>
+          <div class="inline-note">Uses the `gcloud` CLI. Set a project and optionally a service-account credential file override.</div>
+        </div>
+        <div id="setup-vault-azure-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>Vault Name</label><input class="form-input" id="setup-azure-vault-name" placeholder="my-key-vault"></div>
+            <div class="form-field"><label>Tenant ID</label><input class="form-input" id="setup-azure-tenant-id" placeholder="optional"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>Client ID</label><input class="form-input" id="setup-azure-client-id" placeholder="optional"></div>
+            <div class="form-field"><label>Client Secret</label><input class="form-input" type="password" id="setup-azure-client-secret" placeholder="optional"></div>
+          </div>
+          <div class="inline-note">Uses the `az` CLI. Vault name is required. CLI authentication on the host may still be needed.</div>
+        </div>
+        <div id="setup-vault-1password-row" style="display:none;margin-bottom:10px">
+          <div class="form-row">
+            <div class="form-field"><label>Vault Name</label><input class="form-input" id="setup-op-vault" placeholder="Private"></div>
+            <div class="form-field"><label>Service Account Token</label><input class="form-input" type="password" id="setup-op-token" placeholder="optional if op is already signed in"></div>
+          </div>
+          <div class="inline-note">Uses the `op` CLI. A stored service-account token works best for unattended startup.</div>
+        </div>
+        <details style="margin-bottom:12px">
+          <summary class="inline-note" style="cursor:pointer">Advanced vault providers</summary>
+          <div class="vault-chips" style="margin-top:10px">
+            <button class="vault-chip" id="vchip-cyberark" data-action="select-vault" data-vault="cyberark">CyberArk</button>
+            <button class="vault-chip" id="vchip-http" data-action="select-vault" data-vault="http">HTTP</button>
+            <button class="vault-chip" id="vchip-exec" data-action="select-vault" data-vault="exec">Exec</button>
+          </div>
+        </details>
+
+        <div class="setup-section-label" style="margin-top:14px">Service Secret Storage</div>
+        <div class="vault-chips">
+          <button class="vault-chip active" id="sschip-file" data-action="select-service-secrets" data-secret-mode="file">Non-Encrypted File</button>
+          <button class="vault-chip" id="sschip-encrypted_file" data-action="select-service-secrets" data-secret-mode="encrypted_file">Encrypted File</button>
+        </div>
+        <div id="setup-master-row" style="display:none;margin-bottom:4px">
+          <div class="form-field"><label>Master Password</label>
+            <input class="form-input" type="password" id="setup-master-password" placeholder="encrypts service secrets on disk">
+          </div>
+        </div>
+        <hr class="setup-divider">
+      </div>
+
+      <!-- Port -->
+      <div style="margin-bottom:16px">
+        <div class="form-field" style="max-width:160px">
+          <label>Port</label>
+          <input class="form-input" type="text" id="setup-port" placeholder="8989">
+          <div class="inline-note">Default 8989. Port change requires restart.</div>
+        </div>
+      </div>
+
+      <!-- Admin -->
+      <div class="setup-section-label">First Admin Account</div>
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-field"><label>Username</label>
+          <input class="form-input" type="text" id="setup-username" autocomplete="username" placeholder="admin">
+        </div>
+        <div class="form-field"><label>Password</label>
+          <input class="form-input" type="password" id="setup-password" autocomplete="new-password" placeholder="............">
+        </div>
+      </div>
+
+      <div class="setup-section-label">API Services</div>
+      <div class="setup-copy" style="margin-bottom:18px">
+        Finish the admin setup first. API endpoints can be added right after login from the Users page.
+      </div>
+
+      <!-- Submit -->
+      <button class="login-btn" id="btn-setup" data-action="complete-setup">Complete Setup</button>
+      <div class="login-err" id="err-setup"></div>
+    </div>
+  </div>
+
+  <!-- Bootstrap overlay — shown when setup is complete but admin is missing -->
+  <div class="login-overlay" id="bootstrap-overlay">
+    <div class="login-card">
+      <h2>Create Admin</h2>
+      <div class="login-sub">Setup is complete but no admin account exists. Create one to continue.</div>
+      <div class="login-field">
+        <label>Username</label>
+        <input type="text" id="bootstrap-username" autocomplete="username" placeholder="admin">
+      </div>
+      <div class="login-field">
+        <label>Password</label>
+        <input type="password" id="bootstrap-password" autocomplete="new-password" placeholder="............">
+      </div>
+      <button class="login-btn" id="btn-bootstrap" data-action="submit-bootstrap">Create Admin</button>
+      <div class="login-err" id="err-bootstrap"></div>
+    </div>
+  </div>
+
+  <!-- App shell (hidden until login) -->
+  <div id="app-shell" style="display:none">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1 data-action="switch-page" data-page="portal">Apig0</h1>
+        <span class="gateway-url" id="gateway-url"></span>
+      </div>
+      <div class="header-right">
+        <span class="user-badge" id="hdr-user"></span>
+        <span class="role-badge" id="hdr-role"></span>
+        <div class="conn-status" id="conn-status" style="display:none">
+          <div class="conn-dot" id="conn-dot"></div>
+          <span id="conn-text">Disconnected</span>
+        </div>
+        <button class="logout-btn" data-action="logout">Logout</button>
+      </div>
+    </div>
+
+    <!-- Navigation tabs -->
+    <div class="nav">
+      <button class="nav-tab active" id="nav-portal" data-action="switch-page" data-page="portal">Portal</button>
+      <button class="nav-tab admin-only" id="nav-monitor" data-action="switch-page" data-page="monitor">Monitor</button>
+      <button class="nav-tab admin-only" id="nav-users" data-action="switch-page" data-page="users">Users</button>
+      <button class="nav-tab admin-only" id="nav-ratelimits" data-action="switch-page" data-page="ratelimits">Rate Limits</button>
+    </div>
+
+    <!-- ═══════════════════ PORTAL PAGE ═══════════════════ -->
+    <div class="page active" id="page-portal">
+      <div class="welcome">
+        <h2 id="welcome-msg">Welcome</h2>
+        <p>Select a service and stage copy/paste-ready gateway commands for your own terminal.</p>
+      </div>
+      <div class="portal-layout">
+        <div class="portal-column portal-column-left">
+          <div class="section-title">Available Services</div>
+          <div class="portal-services" id="portal-services">
+            <div style="color:var(--text-dim);font-size:13px">Loading...</div>
+          </div>
+          <div class="section-title">Session</div>
+          <div class="session-card">
+            <div class="stat-item">
+              <div class="stat-val" style="color:var(--green)" id="sess-status">Active</div>
+              <div class="stat-label">Status</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-val" id="sess-user">-</div>
+              <div class="stat-label">User</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-val" id="sess-role">-</div>
+              <div class="stat-label">Role</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="portal-column portal-column-main">
+          <div class="setup-card portal-generator-card">
+            <div class="users-toolbar" style="margin-bottom:12px">
+              <h2 id="portal-surface-title">API Access</h2>
+              <span class="service-muted" id="portal-selected-service-copy">Select a service to begin</span>
+            </div>
+            <div class="notice" id="portal-generator-notice"></div>
+            <div class="portal-context-card" id="portal-pending-delivery-card" style="display:none;margin-bottom:12px">
+              <div class="portal-context-title">Pending Key Delivery</div>
+              <div class="portal-context-copy" id="portal-pending-delivery-copy">A gateway key is waiting for this user to claim once.</div>
+              <div class="form-actions" style="margin-top:10px">
+                <button class="btn-primary" data-action="portal-claim-next-key" id="portal-claim-next-key">Claim Key</button>
+                <button class="btn-ghost" data-action="portal-refresh-pending-keys">Refresh</button>
+              </div>
+            </div>
+            <div class="portal-generator-meta">
+              <div class="portal-generator-copy" id="portal-surface-copy">Use the assigned gateway key with the request generator below, then copy the command into curl, Postman, Bruno, or any client you prefer.</div>
+              <div class="form-actions" id="portal-surface-actions">
+                <button class="btn-primary" data-action="portal-copy-command">Copy Command</button>
+                <button class="btn-ghost" data-action="portal-copy-endpoint">Copy Endpoint</button>
+              </div>
+            </div>
+
+            <div id="portal-standard-interface">
+            <div class="portal-builder-grid">
+              <div class="portal-builder-form">
+                <div class="portal-empty-state" id="portal-service-empty">
+                  Waiting for an admin to create and assign a service. Once one is ready for this account, it will appear on the left ready to use.
+                </div>
+                <div class="portal-service-ready" id="portal-service-ready">
+                  <div class="form-group">
+                    <label>Gateway API Endpoint</label>
+                    <div class="portal-endpoint" id="portal-endpoint">Select a service to generate commands.</div>
+                  </div>
+                  <div class="portal-empty-state portal-token-empty" id="portal-token-empty">
+                    No active gateway key is assigned to this username. Command generation stays limited until an admin creates one for this user.
+                  </div>
+                  <div class="portal-service-strip">
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Key Type</span>
+                      <strong class="portal-mini-value" id="portal-key-type">Standard</strong>
+                    </div>
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Key Prefix</span>
+                      <strong class="portal-mini-value" id="portal-key-prefix">-</strong>
+                    </div>
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Key Status</span>
+                      <strong class="portal-mini-value" id="portal-token-status">Missing</strong>
+                    </div>
+                    <div class="portal-mini-card">
+                      <span class="portal-mini-label">Method</span>
+                      <strong class="portal-mini-value" id="portal-method-status">GET</strong>
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button class="btn-primary" id="portal-copy-command-top" data-action="portal-copy-command">Copy Command</button>
+                    <button class="btn-ghost" id="portal-copy-endpoint-main" data-action="portal-copy-endpoint">Copy Endpoint</button>
+                  </div>
+                </div>
+
+                <details class="portal-config-drawer" id="portal-config-drawer">
+                  <summary class="portal-helper-summary">
+                    <span>Advanced Request Setup</span>
+                    <span class="service-muted">Method, token, headers, body</span>
+                  </summary>
+                  <div class="portal-helper-body">
+                    <div class="portal-form-row">
+                      <div class="form-group" style="margin:0">
+                        <label>Method</label>
+                        <select class="form-select" id="portal-method">
+                          <option>GET</option>
+                          <option>POST</option>
+                          <option>PUT</option>
+                          <option>PATCH</option>
+                          <option>DELETE</option>
+                        </select>
+                      </div>
+                      <div class="form-group" style="margin:0">
+                        <label>Path</label>
+                        <input class="form-input" id="portal-path" autocomplete="off" spellcheck="false" placeholder="/v1/items">
+                      </div>
+                    </div>
+
+                    <div class="form-group">
+                      <label>Gateway Key Override</label>
+                      <textarea class="form-textarea portal-token-input" id="portal-token" placeholder="Paste a claimed gateway key to embed it into the generated command. Leave blank to keep a safe placeholder."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                      <label>Custom Headers</label>
+                      <textarea class="form-textarea portal-headers-input" id="portal-headers" spellcheck="false" placeholder="X-Team: demo&#10;X-Trace-Id: local-run"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                      <label>JSON Body</label>
+                      <textarea class="form-textarea portal-body-input" id="portal-body" spellcheck="false" placeholder='{"name":"example"}'></textarea>
+                    </div>
+
+                    <div class="portal-inline-options">
+                      <label class="checkbox" style="margin:0">
+                        <input type="checkbox" id="portal-insecure" checked>
+                        <span>Include insecure TLS flag for self-signed setups</span>
+                      </label>
+                      <button class="btn-ghost" data-action="portal-reset-builder">Reset</button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <div class="portal-builder-side">
+                <details class="portal-helper-drawer">
+                  <summary class="portal-helper-summary">
+                    <span>Command Helpers</span>
+                    <span class="service-muted">Hidden until you open them</span>
+                  </summary>
+                  <div class="portal-helper-body">
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Quick Start</div>
+                      <div class="portal-context-copy" id="portal-context-copy">Choose a service, adjust method and path, then copy a command into your client or automation tool.</div>
+                    </div>
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Active Headers</div>
+                      <pre class="portal-context-block" id="portal-header-block">Authorization: Bearer &lt;paste-token&gt;</pre>
+                    </div>
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Shell Exports</div>
+                      <pre class="portal-context-block" id="portal-env-block">export APIG0_BASE="https://host:8989"
+export APIG0_SERVICE="service"
+export APIG0_TOKEN="paste-token"</pre>
+                    </div>
+                    <div class="portal-context-card">
+                      <div class="portal-context-title">Copy Targets</div>
+                      <pre class="portal-context-block">Copy Command
+Copy Headers
+Copy Auth Header
+Copy Endpoint</pre>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+          <div class="portal-response-grid">
+            <div class="setup-card portal-console-card">
+              <div class="users-toolbar" style="margin-bottom:12px">
+                <h2>Request Generator</h2>
+                <span class="service-muted" id="portal-response-meta">Copy-ready output</span>
+              </div>
+              <div class="portal-empty-state portal-token-empty" id="portal-terminal-empty">
+                No active gateway key is assigned to this account yet.
+              </div>
+              <details class="portal-preview-drawer" open>
+                <summary class="portal-helper-summary">
+                  <span>curl</span>
+                  <span class="service-muted">Generated request preview</span>
+                </summary>
+                <div class="portal-helper-body">
+                  <div class="portal-response-shell">
+                    <div class="portal-response-headers" id="portal-response-headers">Active request details will appear here.</div>
+                    <pre class="portal-response-body" id="portal-response-body">Choose a service to generate a command.</pre>
+                  </div>
+                </div>
+              </details>
+              <div class="form-actions" style="margin-top:12px">
+                <button class="btn-primary" id="portal-copy-command-button" data-action="portal-copy-command">Copy Command</button>
+                <button class="btn-ghost" data-action="portal-copy-headers">Copy Headers</button>
+                <button class="btn-ghost" data-action="portal-copy-auth-header">Copy Auth Header</button>
+                <button class="btn-ghost" data-action="portal-copy-endpoint">Copy Endpoint</button>
+              </div>
+            </div>
+            </div>
+            </div>
+
+            <div id="portal-ai-interface" style="display:none">
+              <div class="portal-builder-grid">
+                <div class="portal-builder-form">
+                  <div class="portal-service-ready" style="display:flex">
+                    <div class="form-group">
+                      <label>Gateway API Base URL</label>
+                      <div class="portal-endpoint" id="portal-ai-endpoint">https://host/openai/v1</div>
+                    </div>
+                    <div class="portal-empty-state portal-token-empty" id="portal-ai-token-empty">
+                      No active AI key is assigned to this username yet.
+                    </div>
+                    <div class="portal-service-strip">
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Key Type</span>
+                        <strong class="portal-mini-value" id="portal-ai-key-type">AI</strong>
+                      </div>
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Key Prefix</span>
+                        <strong class="portal-mini-value" id="portal-ai-key-prefix">-</strong>
+                      </div>
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Assigned Backend</span>
+                        <strong class="portal-mini-value" id="portal-ai-service">-</strong>
+                      </div>
+                      <div class="portal-mini-card">
+                        <span class="portal-mini-label">Models</span>
+                        <strong class="portal-mini-value" id="portal-ai-model-count">All</strong>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button class="btn-primary" data-action="portal-copy-ai-base-url">Copy Base URL</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="portal-builder-side">
+                  <div class="portal-context-card">
+                    <div class="portal-context-title">AI Models</div>
+                    <pre class="portal-context-block" id="portal-ai-models">All models allowed for this key.</pre>
+                  </div>
+                  <div class="portal-context-card">
+                    <div class="portal-context-title">Providers</div>
+                    <pre class="portal-context-block" id="portal-ai-providers">All providers allowed for this key.</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="portal-response-grid">
+                <div class="setup-card portal-console-card">
+                  <div class="users-toolbar" style="margin-bottom:12px">
+                    <h2>Quick Start</h2>
+                    <span class="service-muted" id="portal-ai-meta">Universal AI gateway key</span>
+                  </div>
+                  <details class="portal-preview-drawer" open>
+                    <summary class="portal-helper-summary">
+                      <span>curl</span>
+                      <span class="service-muted">AI gateway request</span>
+                    </summary>
+                    <div class="portal-helper-body">
+                      <div class="portal-response-shell">
+                        <pre class="portal-response-body" id="portal-ai-curl">AI key setup will appear here.</pre>
+                      </div>
+                    </div>
+                  </details>
+                  <div class="form-actions" style="margin-top:12px">
+                    <button class="btn-primary" data-action="portal-copy-ai-curl">Copy curl</button>
+                  </div>
+                </div>
+
+                <div class="setup-card portal-console-card">
+                  <div class="users-toolbar" style="margin-bottom:12px">
+                    <h2>OpenAI-Compatible Snippets</h2>
+                    <span class="service-muted">Use your gateway key instead of the upstream provider key</span>
+                  </div>
+                  <details class="portal-preview-drawer" open>
+                    <summary class="portal-helper-summary">
+                      <span>Python</span>
+                      <span class="service-muted">SDK-compatible example</span>
+                    </summary>
+                    <div class="portal-helper-body">
+                      <div class="portal-response-shell">
+                        <pre class="portal-response-body" id="portal-ai-python">Python snippet will appear here.</pre>
+                      </div>
+                    </div>
+                  </details>
+                  <details class="portal-preview-drawer">
+                    <summary class="portal-helper-summary">
+                      <span>JavaScript</span>
+                      <span class="service-muted">SDK-compatible example</span>
+                    </summary>
+                    <div class="portal-helper-body">
+                      <div class="portal-response-shell">
+                        <pre class="portal-response-body" id="portal-ai-javascript">JavaScript snippet will appear here.</pre>
+                      </div>
+                    </div>
+                  </details>
+                  <div class="form-actions" style="margin-top:12px">
+                    <button class="btn-primary" data-action="portal-copy-ai-python">Copy Python</button>
+                    <button class="btn-ghost" data-action="portal-copy-ai-javascript">Copy JavaScript</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ MONITOR PAGE (admin) ═══════════════════ -->
+    <div class="page" id="page-monitor">
+      <div class="monitor-header">
+        <div class="monitor-stat">
+          <div class="stat-val" id="uptime">0s</div>
+          <div class="stat-label">Uptime</div>
+        </div>
+        <div class="monitor-stat">
+          <div class="stat-val" id="total-req">0</div>
+          <div class="stat-label">Requests</div>
+        </div>
+        <div class="monitor-stat">
+          <div class="stat-val" id="total-err" style="color:var(--red)">0</div>
+          <div class="stat-label">Errors</div>
+        </div>
+      </div>
+
+      <div class="section-title">Services</div>
+      <div class="services-grid" id="services-grid"></div>
+
+      <div class="log-section">
+        <div class="log-header">
+          <h2>Live Requests</h2>
+          <div class="log-controls">
+            <button id="btn-pause" data-action="toggle-pause">Pause</button>
+            <button data-action="clear-log">Clear</button>
+          </div>
+        </div>
+        <div class="log-body" id="log-body">
+          <table>
+            <thead>
+              <tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Latency</th><th>IP</th><th>User</th></tr>
+            </thead>
+            <tbody id="log-table"></tbody>
+          </table>
+          <div class="empty-log" id="empty-log">Waiting for requests...</div>
+        </div>
+      </div>
+
+      <div class="console">
+        <h2>Test Console</h2>
+        <div class="console-row" id="test-console-buttons"></div>
+        <div class="test-result" id="test-result"></div>
+        <div class="svc-access-panel" id="svc-access-panel">
+          <div class="svc-access-header">
+            <span class="svc-access-title">User access — <span id="svc-access-name"></span></span>
+            <button class="btn-ghost" style="padding:2px 8px;font-size:11px" data-action="close-service-access-panel">✕ close</button>
+          </div>
+          <div class="svc-access-users" id="svc-access-users">
+            <span class="svc-access-empty">Loading...</span>
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn-primary" style="padding:5px 14px;font-size:11px" data-action="save-service-access">Save Access</button>
+          </div>
+        </div>
+      </div>
+      <div class="setup-card" style="margin-top:18px">
+        <div class="users-toolbar" style="margin-bottom:10px">
+          <h2>Audit Trail</h2>
+          <button class="btn-ghost" data-action="refresh-audit">Refresh</button>
+        </div>
+        <table class="user-table">
+          <thead><tr><th>When</th><th>User</th><th>Source</th><th>Service</th><th>Route</th><th>Decision</th><th>Reason</th></tr></thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ USERS PAGE (admin) ═══════════════════ -->
+    <div class="page" id="page-users">
+      <div class="notice" id="users-notice"></div>
+      <div class="setup-card">
+        <h3>System Storage</h3>
+        <div class="status-grid">
+          <div class="status-item">
+            <div class="status-label">Storage Mode</div>
+            <div class="status-value" id="users-storage-mode">-</div>
+          </div>
+          <div class="status-item">
+            <div class="status-label">Secrets Backend</div>
+            <div class="status-value" id="users-secrets-status">-</div>
+          </div>
+          <div class="status-item">
+            <div class="status-label">Users Backend</div>
+            <div class="status-value" id="users-store-status">-</div>
+          </div>
+          <div class="status-item">
+            <div class="status-label">Services</div>
+            <div class="status-value" id="users-service-count">-</div>
+          </div>
+        </div>
+        <div class="status-copy" id="users-reset-copy"></div>
+        <div class="status-copy" id="users-recovery-copy" style="margin-top:8px"></div>
+        <div id="upgrade-storage-btn-wrap" style="margin-top:14px;display:none">
+          <button class="btn-primary" data-action="show-upgrade-modal">Upgrade to Persistent</button>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:10px">Save current state to disk so the gateway survives restarts</span>
+        </div>
+        <div class="form-actions" style="margin-top:14px">
+          <button class="btn-danger" id="btn-admin-reset" data-action="admin-reset-setup">Hard Reset Gateway</button>
+          <span style="font-size:11px;color:var(--text-dim)">Admin-only. Wipes setup, users, services, secrets, and active sessions.</span>
+        </div>
+      </div>
+      <div class="users-toolbar">
+        <h2>API Endpoints</h2>
+        <button class="btn-primary" data-action="toggle-service-form">+ New API</button>
+      </div>
+      <div class="setup-copy" style="margin:-6px 0 14px">After setup, add or update API endpoints and saved keys here. New enabled APIs will immediately become available in admin routing and user access settings.</div>
+      <div class="status-copy" id="service-secret-storage-copy" style="margin:-8px 0 14px"></div>
+      <div class="create-form" id="service-form">
+        <h3 id="service-form-title" style="font-size:14px;color:var(--blue);margin-bottom:12px">New API Endpoint</h3>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Name</label>
+            <input class="form-input" id="service-name" placeholder="orders" type="text">
+          </div>
+          <div class="form-field">
+            <label>Base URL</label>
+            <input class="form-input" id="service-base-url" placeholder="https://api.example.com" type="text">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:180px">
+            <label>Auth Type</label>
+            <select class="form-input" id="service-auth-type" data-change-action="update-service-auth-fields">
+              <option value="none">none</option>
+              <option value="bearer">bearer</option>
+              <option value="x-api-key">x-api-key</option>
+              <option value="custom-header">custom-header</option>
+              <option value="basic">basic</option>
+            </select>
+          </div>
+          <div class="form-field" id="service-header-row" style="display:none">
+            <label>Header Name</label>
+            <input class="form-input" id="service-header-name" placeholder="X-API-Key" type="text">
+          </div>
+          <div class="form-field" id="service-basic-row" style="display:none">
+            <label>Basic Username</label>
+            <input class="form-input" id="service-basic-username" placeholder="service-user" type="text">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" id="service-secret-row" style="display:none">
+            <label>Saved Key / Secret</label>
+            <input class="form-input" id="service-secret" placeholder="leave blank to keep current saved value" type="password">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:160px">
+            <label>Timeout (ms)</label>
+            <input class="form-input" id="service-timeout-ms" type="number" min="100" step="100" value="10000">
+          </div>
+          <div class="form-field" style="max-width:160px">
+            <label>Safe Retries</label>
+            <input class="form-input" id="service-retry-count" type="number" min="0" max="3" value="0">
+          </div>
+          <div class="form-field" id="service-secret-expiry-row" style="display:none">
+            <label>Secret Expires At</label>
+            <input class="form-input" id="service-secret-expires" type="datetime-local">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:220px">
+            <label>Provider</label>
+            <select class="form-input" id="service-provider">
+              <option value="">none</option>
+              <option value="openai">openai</option>
+              <option value="anthropic">anthropic</option>
+              <option value="hermes">hermes</option>
+              <option value="ollama">ollama</option>
+              <option value="vllm">vllm</option>
+              <option value="custom">custom</option>
+            </select>
+          </div>
+          <div class="form-field" style="align-self:end">
+            <label class="checkbox" style="margin:0">
+              <input type="checkbox" id="service-openai-compatible">
+              <span>Expose this service through the AI gateway (`/openai/v1`)</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field" id="service-secret-notes-row" style="display:none">
+            <label>Secret Notes</label>
+            <input class="form-input" id="service-secret-notes" placeholder="rotation note or owner" type="text">
+          </div>
+        </div>
+        <div class="toggle-line" id="service-clear-secret-wrap" style="display:none">
+          <input type="checkbox" id="service-clear-secret" data-change-action="toggle-service-secret-clear">
+          <label for="service-clear-secret" style="cursor:pointer">Clear the saved key for this API</label>
+        </div>
+        <div class="toggle-line" style="margin-top:8px">
+          <input type="checkbox" id="service-enabled" checked>
+          <label for="service-enabled" style="cursor:pointer">Enabled and visible for routing/user access</label>
+        </div>
+        <div class="inline-note" id="service-form-note">Use this section to add endpoints after setup, rotate saved keys, or disable APIs without deleting them.</div>
+        <div class="form-actions">
+          <button class="btn-primary" data-action="save-service">Save API</button>
+          <button class="btn-ghost" data-action="cancel-service-form">Cancel</button>
+        </div>
+      </div>
+      <table class="user-table" style="margin-bottom:18px">
+        <thead><tr><th>Name</th><th>Base URL</th><th>Auth</th><th>Retries</th><th>Saved Key</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="services-tbody"></tbody>
+      </table>
+      <div class="users-toolbar">
+        <h2>User Management</h2>
+        <button class="btn-primary" data-action="toggle-create-user-form">+ New User</button>
+      </div>
+      <div class="create-form" id="create-form">
+        <div class="form-row">
+          <div class="form-field">
+            <label>Username</label>
+            <input class="form-input" id="new-username" placeholder="alice" type="text">
+          </div>
+          <div class="form-field">
+            <label>Password</label>
+            <input class="form-input" id="new-password" placeholder="............" type="password">
+          </div>
+          <div class="form-field" style="max-width:100px">
+            <label>Role</label>
+            <select class="form-input" id="new-role">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Allowed APIs</label>
+            <div class="service-checks" id="create-service-checks"></div>
+            <div class="service-muted" id="create-service-hint">Selected APIs will be available to this user.</div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" data-action="create-user">Create</button>
+          <button class="btn-ghost" data-action="toggle-create-user-form">Cancel</button>
+        </div>
+      </div>
+      <table class="user-table">
+        <thead><tr><th>Username</th><th>Role</th><th>Allowed APIs</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+      <div class="users-toolbar" style="margin-top:18px">
+        <h2>Gateway Tokens</h2>
+        <button class="btn-primary" data-action="toggle-token-form">+ New Token</button>
+      </div>
+      <div class="create-form" id="token-form">
+        <div class="form-row">
+          <div class="form-field">
+            <label>Token Name</label>
+            <input class="form-input" id="token-name" placeholder="ops-cli" type="text">
+          </div>
+          <div class="form-field">
+            <label>User</label>
+            <input class="form-input" id="token-user" placeholder="alice" type="text">
+          </div>
+          <div class="form-field">
+            <label>Expires At</label>
+            <input class="form-input" id="token-expires" type="datetime-local">
+          </div>
+          <div class="form-field" style="max-width:160px">
+            <label>Key Type</label>
+            <select class="form-input" id="token-key-type" data-change-action="update-token-type-fields">
+              <option value="standard">standard</option>
+              <option value="ai">ai</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Allowed APIs</label>
+            <div class="service-checks" id="token-service-checks"></div>
+            <div class="service-muted">Leave everything checked to follow the user’s normal access. Uncheck to scope the token tighter.</div>
+          </div>
+        </div>
+        <details class="portal-config-drawer" style="margin-top:8px;display:none" id="token-ai-scope">
+          <summary class="portal-helper-summary">
+            <span>AI Gateway Scope</span>
+            <span class="service-muted">Universal AI key settings</span>
+          </summary>
+          <div class="portal-helper-body">
+            <div class="form-row">
+              <div class="form-field">
+                <label>AI Service</label>
+                <select class="form-input" id="token-openai-service"></select>
+                <div class="service-muted">Pick the upstream AI service this key should use through the gateway.</div>
+              </div>
+              <div class="form-field" style="max-width:180px">
+                <label>Rate Limit RPM</label>
+                <input class="form-input" id="token-rate-limit-rpm" type="number" min="0" value="0">
+              </div>
+              <div class="form-field" style="max-width:180px">
+                <label>Burst</label>
+                <input class="form-input" id="token-rate-limit-burst" type="number" min="0" value="0">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>Allowed Models</label>
+                <textarea class="form-textarea" id="token-allowed-models" placeholder="gpt-4.1-mini&#10;provider-model-name"></textarea>
+              </div>
+              <div class="form-field">
+                <label>Allowed Providers</label>
+                <textarea class="form-textarea" id="token-allowed-providers" placeholder="openai&#10;anthropic&#10;hermes"></textarea>
+              </div>
+            </div>
+            <div class="service-muted">Leave these blank to allow any model/provider available through the selected AI service.</div>
+          </div>
+        </details>
+        <div class="form-actions">
+          <button class="btn-primary" data-action="create-token">Create Token</button>
+          <button class="btn-ghost" data-action="toggle-token-form">Cancel</button>
+        </div>
+      </div>
+      <table class="user-table">
+        <thead><tr><th>Name</th><th>User</th><th>Scope</th><th>Expires</th><th>Last Used</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="tokens-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════ RATE LIMITS PAGE (admin) ═══════════════════ -->
+    <div class="page" id="page-ratelimits">
+      <div class="notice" id="rl-notice"></div>
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:8px">Rate Limit Configuration</h2>
+      <div class="setup-copy" style="margin-bottom:20px">
+        Apig0 uses a token-bucket limiter per user. The sustained limit controls the normal refill speed.
+        The burst allowance controls how many requests can pass immediately when traffic arrives all at once.
+      </div>
+      <div class="rl-section">
+        <div class="rl-section-title">Default (all users)</div>
+        <div class="rl-row">
+          <div class="rl-label">Sustained limit <span class="rl-sublabel">Requests allowed per minute over normal use. Set 0 to disable limiting.</span></div>
+          <input class="rl-input" id="rl-default-rpm" type="number" min="0" value="60">
+          <span class="rl-unit">requests/min</span>
+        </div>
+        <div class="rl-row">
+          <div class="rl-label">Burst allowance <span class="rl-sublabel">Immediate requests allowed before throttling, useful for page loads or short API fan-out.</span></div>
+          <input class="rl-input" id="rl-default-burst" type="number" min="0" value="10">
+          <span class="rl-unit">instant requests</span>
+        </div>
+      </div>
+      <div class="rl-section">
+        <div class="rl-section-title">Per-user overrides</div>
+        <div id="rl-users-list"></div>
+        <button class="btn-ghost" style="font-size:12px;margin-top:6px" data-action="add-rate-limit-user-row">+ Add user override</button>
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn-primary" data-action="save-rate-limits">Save Rate Limits</button>
+      </div>
+    </div>
+
+  </div><!-- /app-shell -->
+
+  <!-- Upgrade storage modal -->
+  <div class="qr-modal-bg" id="upgrade-modal-bg">
+    <div class="qr-modal" style="max-width:520px;text-align:left">
+      <h3 style="text-align:center;margin-bottom:16px">Upgrade to Persistent Storage</h3>
+      <p style="text-align:center;margin-bottom:20px">Current users, services, and settings will be saved to local files.</p>
+
+      <div class="setup-section-label">TOTP Secret Storage</div>
+      <div class="vault-chips" style="margin-bottom:14px">
+        <button class="vault-chip active" id="up-vchip-file" data-action="select-upgrade-vault" data-vault="file">Local File</button>
+        <button class="vault-chip" id="up-vchip-hashicorp" data-action="select-upgrade-vault" data-vault="hashicorp">Hashicorp</button>
+        <button class="vault-chip" id="up-vchip-aws" data-action="select-upgrade-vault" data-vault="aws">AWS</button>
+        <button class="vault-chip" id="up-vchip-gcp" data-action="select-upgrade-vault" data-vault="gcp">GCP</button>
+        <button class="vault-chip" id="up-vchip-azure" data-action="select-upgrade-vault" data-vault="azure">Azure</button>
+        <button class="vault-chip" id="up-vchip-1password" data-action="select-upgrade-vault" data-vault="1password">1Password</button>
+      </div>
+      <div id="up-vault-hashicorp-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>Vault Address</label><input class="form-input" id="up-vault-address" placeholder="http://127.0.0.1:8200"></div>
+          <div class="form-field"><label>Engine</label><input class="form-input" id="up-vault-engine" placeholder="secret"></div>
+        </div>
+      </div>
+      <div id="up-vault-aws-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>AWS Region</label><input class="form-input" id="up-aws-region" placeholder="us-east-1"></div>
+          <div class="form-field"><label>AWS Profile</label><input class="form-input" id="up-aws-profile" placeholder="default"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>Access Key ID</label><input class="form-input" id="up-aws-access-key-id" placeholder="AKIA..."></div>
+          <div class="form-field"><label>Secret Access Key</label><input class="form-input" type="password" id="up-aws-secret-access-key" placeholder="optional"></div>
+        </div>
+        <div class="form-field"><label>Session Token</label><input class="form-input" type="password" id="up-aws-session-token" placeholder="optional"></div>
+      </div>
+      <div id="up-vault-gcp-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>GCP Project</label><input class="form-input" id="up-gcp-project" placeholder="my-project-id"></div>
+          <div class="form-field"><label>Credentials File</label><input class="form-input" id="up-gcp-creds-file" placeholder="/path/to/service-account.json"></div>
+        </div>
+      </div>
+      <div id="up-vault-azure-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>Vault Name</label><input class="form-input" id="up-azure-vault-name" placeholder="my-key-vault"></div>
+          <div class="form-field"><label>Tenant ID</label><input class="form-input" id="up-azure-tenant-id" placeholder="optional"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>Client ID</label><input class="form-input" id="up-azure-client-id" placeholder="optional"></div>
+          <div class="form-field"><label>Client Secret</label><input class="form-input" type="password" id="up-azure-client-secret" placeholder="optional"></div>
+        </div>
+      </div>
+      <div id="up-vault-1password-row" style="display:none;margin-bottom:10px">
+        <div class="form-row">
+          <div class="form-field"><label>Vault Name</label><input class="form-input" id="up-op-vault" placeholder="Private"></div>
+          <div class="form-field"><label>Service Account Token</label><input class="form-input" type="password" id="up-op-token" placeholder="optional"></div>
+        </div>
+      </div>
+      <details style="margin-bottom:12px">
+        <summary class="inline-note" style="cursor:pointer">Advanced vault providers</summary>
+        <div class="vault-chips" style="margin-top:10px">
+          <button class="vault-chip" id="up-vchip-cyberark" data-action="select-upgrade-vault" data-vault="cyberark">CyberArk</button>
+          <button class="vault-chip" id="up-vchip-http" data-action="select-upgrade-vault" data-vault="http">HTTP</button>
+          <button class="vault-chip" id="up-vchip-exec" data-action="select-upgrade-vault" data-vault="exec">Exec</button>
+        </div>
+      </details>
+
+      <div class="setup-section-label" style="margin-top:10px">Service Secret Storage</div>
+      <div class="vault-chips" style="margin-bottom:14px">
+        <button class="vault-chip active" id="up-sschip-file" data-action="select-upgrade-service-secrets" data-secret-mode="file">Non-Encrypted File</button>
+        <button class="vault-chip" id="up-sschip-encrypted_file" data-action="select-upgrade-service-secrets" data-secret-mode="encrypted_file">Encrypted File</button>
+      </div>
+      <div id="up-master-row" style="display:none;margin-bottom:10px">
+        <div class="form-field"><label>Master Password</label>
+          <input class="form-input" type="password" id="up-master-password" placeholder="encrypts service secrets on disk">
+        </div>
+      </div>
+
+      <div class="login-err" id="err-upgrade" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn-primary" id="btn-upgrade" data-action="submit-upgrade" style="flex:1">Save to Disk</button>
+        <button class="btn-ghost" data-action="close-upgrade-modal" style="flex:1">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR modal -->
+  <div class="qr-modal-bg" id="qr-modal-bg">
+    <div class="qr-modal">
+      <h3>User Created</h3>
+      <p id="qr-username-msg">Scan this QR code with an authenticator app.</p>
+      <div id="qr-canvas"></div>
+      <div class="qr-uri" id="qr-uri"></div>
+      <button class="btn-primary" style="width:100%" data-action="close-qr">Done</button>
+    </div>
+  </div>
+
+  <script src="/static/vendor/qrcode.min.js"></script>
+  <script src="/static/js/app-core.js"></script>
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/portal-console.js"></script>
+  <script src="/static/js/setup.js"></script>
+  <script src="/static/js/monitor.js"></script>
+  <script src="/static/js/admin-services.js"></script>
+  <script src="/static/js/admin-users.js"></script>
+  <script src="/static/js/admin-tokens.js"></script>
+  <script src="/static/js/admin-ratelimits.js"></script>
+  <script src="/static/js/navigation.js"></script>
+  <script src="/static/js/bootstrap.js"></script>
+</body>
+</html>

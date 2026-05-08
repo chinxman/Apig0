@@ -21,12 +21,15 @@ dist/
 # TLS certs
 certs/
 
-# Local assistant context
-.codex/
-.codex
+# Local assistant context, except project-scoped Codex agents
+.codex/*
+!.codex/agents/
+!.codex/agents/*.toml
 
 # Standalone tools (managed separately)
 secret-creator/
+secret-creator/secret.txt
+0.0.2v/secret-creator/secret.txt
 
 # Runtime data files (written by apig0 at startup)
 apig0-setup.json
@@ -46,3 +49,6 @@ audit.log
 
 # QR code output
 *-totp-qr.png
+
+# Security-readiness evidence that should remain tracked
+!security/evidence/commands.log

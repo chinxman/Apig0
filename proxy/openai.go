@@ -91,15 +91,14 @@ func NewOpenAICompatibleProxy() gin.HandlerFunc {
 		}
 
 		reverseProxy := httputil.NewSingleHostReverseProxy(u)
-		originalDirector := reverseProxy.Director
-		reverseProxy.Director = func(req *http.Request) {
-			originalDirector(req)
-			req.URL.Path = joinProxyPath(u.Path, upstreamPath)
-			req.URL.RawPath = ""
-			req.Header.Del("Authorization")
-			req.Header.Del("X-API-Key")
-			applyServiceAuth(req, service)
-			req.Header.Set("X-Forwarded-For", c.ClientIP())
+		reverseProxy.Rewrite = func(req *httputil.ProxyRequest) {
+			req.SetURL(u)
+			req.Out.URL.Path = joinProxyPath(u.Path, upstreamPath)
+			req.Out.URL.RawPath = ""
+			req.Out.Header.Del("Authorization")
+			req.Out.Header.Del("X-API-Key")
+			req.SetXForwarded()
+			applyServiceAuth(req.Out, service)
 		}
 		reverseProxy.Transport = newRetryTransport(service)
 		reverseProxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {

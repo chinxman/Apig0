@@ -223,6 +223,9 @@ func buildServiceConfig(req serviceAdminRequest, existing *config.ServiceConfig)
 	if baseURL == "" {
 		return config.ServiceConfig{}, "", errors.New("base URL is required")
 	}
+	if err := config.ValidateServiceBaseURL(baseURL); err != nil {
+		return config.ServiceConfig{}, "", err
+	}
 
 	enabled := true
 	if existing != nil {
