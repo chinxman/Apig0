@@ -4,9 +4,55 @@
   const terminalLines = [];
   const commandHistory = [];
   let commandHistoryIndex = 0;
+  let copyModalTimer = 0;
+  let copyModalValue = "";
+  let copyModalTitle = "Copied";
 
-  function setNotice(msg, type) {
-    util.setNotice("portal-generator-notice", msg, type);
+  function setNotice(msg, type, timeout) {
+    util.setNotice("portal-generator-notice", msg, type, timeout);
+  }
+
+  function compactPreview(value, limit = 96) {
+    const singleLine = String(value || "").replace(/\s+/g, " ").trim();
+    if (!singleLine) return "";
+    return singleLine.length > limit
+      ? singleLine.slice(0, limit - 1) + "…"
+      : singleLine;
+  }
+
+  function closeCopyModal() {
+    const modal = dom.id("portal-copy-modal-bg");
+    if (modal) modal.classList.remove("visible");
+    if (copyModalTimer) {
+      window.clearTimeout(copyModalTimer);
+      copyModalTimer = 0;
+    }
+  }
+
+  function copyModalReminder(kind, value) {
+    const preview = String(value || "");
+    if (kind === "endpoint") {
+      return "This is only the endpoint URL. Add the token separately in curl, Postman, Bruno, or whichever client you use.";
+    }
+    if (preview.includes(keyShownOncePlaceholder()) || preview.includes("<paste-token>")) {
+      return "Replace the token placeholder with the token you were given. Raw gateway keys are shown once and are not hosted in this web UI.";
+    }
+    return "This preview already includes the token currently loaded in this browser session. Handle that copied command carefully.";
+  }
+
+  function openCopyModal(kind, value) {
+    copyModalValue = String(value || "");
+    copyModalTitle = kind === "endpoint" ? "Endpoint Ready" : "Command Ready";
+    dom.text("portal-copy-modal-title", copyModalTitle);
+    dom.text("portal-copy-modal-copy", kind === "endpoint"
+      ? "The endpoint is copied. Keep it as a fallback if you do not want the full curl command."
+      : "The generated command is copied and ready to paste.");
+    dom.text("portal-copy-modal-value", copyModalValue);
+    dom.text("portal-copy-modal-reminder", copyModalReminder(kind, copyModalValue));
+    const modal = dom.id("portal-copy-modal-bg");
+    if (modal) modal.classList.add("visible");
+    if (copyModalTimer) window.clearTimeout(copyModalTimer);
+    copyModalTimer = window.setTimeout(closeCopyModal, 5200);
   }
 
   function allowedServices() {
@@ -283,9 +329,8 @@
     const tokenInput = dom.id("portal-token");
     const configDrawer = dom.id("portal-config-drawer");
     const actions = [
-      dom.id("portal-copy-command-top"),
-      dom.id("portal-copy-endpoint-main"),
-      dom.id("portal-copy-command-button")
+      dom.id("portal-copy-command-main"),
+      dom.id("portal-copy-endpoint-main")
     ];
     if (tokenInput) tokenInput.disabled = !enabled;
     for (const button of actions) {
@@ -432,26 +477,29 @@
     return String(value || "").replace(/(["\\$`])/g, "\\$1");
   }
 
+  function shellArg(value) {
+    return "'" + shellSingleQuote(value) + "'";
+  }
+
   function buildCommand() {
-    const insecure = dom.id("portal-insecure")?.checked ? " -k" : "";
+    const insecure = dom.id("portal-insecure")?.checked;
     const method = state.portalMethod;
     const body = String(state.portalBody || "").trim();
     const headers = exportHeaders().slice();
     if (body && method !== "GET" && method !== "DELETE" && !hasHeader(headers, "Content-Type")) {
       headers.push({name: "Content-Type", value: "application/json"});
     }
-    const lines = [
-      "curl" + insecure + " \\",
-      "  -X " + method + " \\"
-    ];
+    const parts = ["curl"];
+    if (insecure) parts.push("-k");
+    parts.push("-X", method);
     for (const header of headers) {
-      lines.push('  -H "' + shellDoubleQuote(header.name + ": " + header.value) + '" \\');
+      parts.push("-H", shellArg(header.name + ": " + header.value));
     }
     if (body && method !== "GET" && method !== "DELETE") {
-      lines.push("  --data '" + shellSingleQuote(body) + "' \\");
+      parts.push("--data", shellArg(body));
     }
-    lines.push('  "' + shellDoubleQuote(requestUrl()) + '"');
-    return lines.join("\n");
+    parts.push(shellArg(requestUrl()));
+    return parts.join(" ");
   }
 
   function activeCommand() {
@@ -529,7 +577,7 @@
     const configDrawer = dom.id("portal-config-drawer");
     const tokenEmpty = dom.id("portal-token-empty");
     const terminalEmpty = dom.id("portal-terminal-empty");
-    const usageEnabled = hasService && tokenAssigned;
+    const usageEnabled = hasService;
     const tokenLoaded = hasPastedToken();
     dom.text("portal-selected-service-copy", service ? "Selected service: " + service : "Select a service to begin");
     dom.text("portal-endpoint", endpoint || "Select a service to generate commands.");
@@ -547,18 +595,16 @@
     setUsageEnabled(usageEnabled);
     dom.text("portal-context-copy", service
       ? (tokenAssigned
-        ? "This service is ready for copy-and-paste usage. Claim or paste the gateway key once if you want the generated command to include the real token."
+        ? "Set the token you were given before running the command. If you leave it blank, the copied preview keeps a safe placeholder."
         : "A service is available, but this username has no active token assigned yet.")
       : "Wait for a service to be assigned, then click it to generate a copy-ready request.");
     dom.text("portal-response-meta", service
       ? (tokenAssigned ? "curl preview for " + service : "Waiting for assigned key")
-      : "Copy-ready output");
+      : "Copy-ready curl");
     dom.text("portal-response-headers", [
       "Endpoint: " + (endpoint || "-"),
       "Method: " + state.portalMethod,
-      "Key: " + (!tokenAssigned ? "Missing" : (tokenLoaded ? "Loaded in browser session" : "Assigned to " + (state.currentUser || "user"))),
-      "Headers: " + headers.length,
-      "TLS flag: " + (dom.id("portal-insecure")?.checked ? "enabled" : "disabled")
+      "Key: " + (!tokenAssigned ? "Missing" : (tokenLoaded ? "Loaded in browser session" : "Set the token you were given"))
     ].join("\n"));
   }
 
@@ -612,7 +658,7 @@
     if (!isAIKey()) {
       if (actions) actions.style.display = "flex";
       dom.text("portal-surface-title", "API Access");
-      dom.text("portal-surface-copy", "Use the assigned gateway key with the request generator below, then copy the command into curl, Postman, Bruno, or any client you prefer.");
+      dom.text("portal-surface-copy", "");
     }
     renderPendingDeliveryCard();
     renderContext();
@@ -634,7 +680,8 @@
     }
     try {
       await navigator.clipboard.writeText(value);
-      setNotice(successMessage, "ok");
+      const preview = compactPreview(value);
+      setNotice(preview ? successMessage + " " + preview : successMessage, "ok", 2200);
       return true;
     } catch {
       setNotice("Clipboard copy failed in this browser.", "err");
@@ -1089,6 +1136,13 @@
     renderHistory();
     seedTerminal();
     bindInputs();
+    const copyModal = dom.id("portal-copy-modal-bg");
+    if (copyModal && copyModal.dataset.bound !== "true") {
+      copyModal.dataset.bound = "true";
+      copyModal.addEventListener("click", (event) => {
+        if (event.target === copyModal) closeCopyModal();
+      });
+    }
     ensureAssignedTokenLoaded(true);
     syncStateFromInputs();
     render();
@@ -1096,8 +1150,18 @@
 
   App.actions["portal-select-service"] = (el) => selectService(el.dataset.service);
   App.actions["portal-copy-command"] = async () => {
-    const ok = await copyCommand();
-    pushTerminal([terminalLine(ok ? "ok" : "err", ok ? "Command copied to clipboard." : "Copy failed.")]);
+    if (isAIKey()) {
+      const value = aiCurlSnippet();
+      const ok = await copyText(value, "curl snippet copied.");
+      if (ok) openCopyModal("command", value);
+      return;
+    }
+    syncStateFromInputs();
+    render();
+    recordHistory();
+    const value = activeCommand();
+    const ok = await copyText(value, "Command copied.");
+    if (ok) openCopyModal("command", value);
   };
   App.actions["portal-prime-terminal"] = primeTerminal;
   App.actions["portal-claim-next-key"] = claimNextPendingKey;
@@ -1111,8 +1175,20 @@
     pushTerminal([terminalLine(ok ? "ok" : "err", ok ? "Auth header copied to clipboard." : "Copy failed.")]);
   };
   App.actions["portal-copy-endpoint"] = async () => {
-    const ok = await copyText(requestUrl(), "Endpoint copied.");
-    pushTerminal([terminalLine(ok ? "ok" : "err", ok ? "Endpoint copied to clipboard." : "Copy failed.")]);
+    syncStateFromInputs();
+    render();
+    const value = requestUrl();
+    const ok = await copyText(value, "Endpoint copied.");
+    if (ok) openCopyModal("endpoint", value);
+  };
+  App.actions["portal-close-copy-modal"] = closeCopyModal;
+  App.actions["portal-copy-modal-copy"] = async () => {
+    if (!copyModalValue) {
+      closeCopyModal();
+      return;
+    }
+    const ok = await copyText(copyModalValue, copyModalTitle + " copied.");
+    if (ok) openCopyModal(copyModalTitle === "Endpoint Ready" ? "endpoint" : "command", copyModalValue);
   };
   App.actions["portal-clear-history"] = clearHistory;
   App.actions["portal-apply-history"] = (el) => applyHistory(parseInt(el.dataset.historyIndex, 10));

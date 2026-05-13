@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -91,6 +92,7 @@ func NewOpenAICompatibleProxy() gin.HandlerFunc {
 		}
 
 		reverseProxy := httputil.NewSingleHostReverseProxy(u)
+		reverseProxy.Director = nil
 		reverseProxy.Rewrite = func(req *httputil.ProxyRequest) {
 			req.SetURL(u)
 			req.Out.URL.Path = joinProxyPath(u.Path, upstreamPath)
@@ -102,6 +104,7 @@ func NewOpenAICompatibleProxy() gin.HandlerFunc {
 		}
 		reverseProxy.Transport = newRetryTransport(service)
 		reverseProxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
+			log.Printf("[proxy] openai upstream transport failure service=%s upstream=%s method=%s path=%s err=%v", service.Name, service.BaseURL, req.Method, req.URL.Path, err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte(`{"error":"upstream unavailable"}`))

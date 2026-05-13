@@ -107,9 +107,7 @@
     hideAllOverlays();
     dom.show("app-shell");
     dom.text("hdr-user", user);
-    dom.text("welcome-msg", "Welcome, " + user);
-    dom.text("sess-user", user);
-    dom.text("sess-role", state.currentRole);
+    dom.text("sess-status", "Active");
     const roleBadge = dom.id("hdr-role");
     roleBadge.textContent = state.currentRole;
     roleBadge.className = "role-badge" + (state.currentRole === "admin" ? " admin" : "");

@@ -18,6 +18,7 @@ type serviceAdminRequest struct {
 	AuthType      string `json:"auth_type"`
 	HeaderName    string `json:"header_name"`
 	BasicUsername string `json:"basic_username"`
+	TLSSkipVerify *bool  `json:"tls_skip_verify"`
 	Provider      string `json:"provider"`
 	OpenAICompat  bool   `json:"openai_compatible"`
 	TimeoutMS     *int   `json:"timeout_ms"`
@@ -246,8 +247,12 @@ func buildServiceConfig(req serviceAdminRequest, existing *config.ServiceConfig)
 		Enabled:       enabled,
 	}
 	if existing != nil {
+		cfg.TLSSkipVerify = existing.TLSSkipVerify
 		cfg.TimeoutMS = existing.TimeoutMS
 		cfg.RetryCount = existing.RetryCount
+	}
+	if req.TLSSkipVerify != nil {
+		cfg.TLSSkipVerify = *req.TLSSkipVerify
 	}
 	if req.TimeoutMS != nil {
 		cfg.TimeoutMS = *req.TimeoutMS

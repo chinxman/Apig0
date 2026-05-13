@@ -1344,7 +1344,144 @@
      ]
     }
    },
-   "results": []
+   "results": [
+    {
+     "message": {
+      "text": "generic-api-key has detected secret for file 0.0.2v/secret-creator/secret.txt at commit 1601e87b5333789c926c8094cc49261b5f428b8d."
+     },
+     "ruleId": "generic-api-key",
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "0.0.2v/secret-creator/secret.txt"
+        },
+        "region": {
+         "startLine": 3,
+         "startColumn": 4,
+         "endLine": 3,
+         "endColumn": 44,
+         "snippet": {
+          "text": "REDACTED"
+         }
+        }
+       }
+      }
+     ],
+     "partialFingerprints": {
+      "commitSha": "1601e87b5333789c926c8094cc49261b5f428b8d",
+      "email": "chinxman@users.noreply.github.com",
+      "author": "chinxman",
+      "date": "2026-03-24T19:38:46Z",
+      "commitMessage": "Initial commit"
+     },
+     "properties": {
+      "tags": []
+     }
+    },
+    {
+     "message": {
+      "text": "generic-api-key has detected secret for file 0.0.2v/secret-creator/secret.txt at commit 1601e87b5333789c926c8094cc49261b5f428b8d."
+     },
+     "ruleId": "generic-api-key",
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "0.0.2v/secret-creator/secret.txt"
+        },
+        "region": {
+         "startLine": 6,
+         "startColumn": 11,
+         "endLine": 6,
+         "endColumn": 66,
+         "snippet": {
+          "text": "REDACTED"
+         }
+        }
+       }
+      }
+     ],
+     "partialFingerprints": {
+      "commitSha": "1601e87b5333789c926c8094cc49261b5f428b8d",
+      "email": "chinxman@users.noreply.github.com",
+      "author": "chinxman",
+      "date": "2026-03-24T19:38:46Z",
+      "commitMessage": "Initial commit"
+     },
+     "properties": {
+      "tags": []
+     }
+    },
+    {
+     "message": {
+      "text": "generic-api-key has detected secret for file secret-creator/secret.txt at commit 1601e87b5333789c926c8094cc49261b5f428b8d."
+     },
+     "ruleId": "generic-api-key",
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "secret-creator/secret.txt"
+        },
+        "region": {
+         "startLine": 3,
+         "startColumn": 4,
+         "endLine": 3,
+         "endColumn": 44,
+         "snippet": {
+          "text": "REDACTED"
+         }
+        }
+       }
+      }
+     ],
+     "partialFingerprints": {
+      "commitSha": "1601e87b5333789c926c8094cc49261b5f428b8d",
+      "email": "chinxman@users.noreply.github.com",
+      "author": "chinxman",
+      "date": "2026-03-24T19:38:46Z",
+      "commitMessage": "Initial commit"
+     },
+     "properties": {
+      "tags": []
+     }
+    },
+    {
+     "message": {
+      "text": "generic-api-key has detected secret for file secret-creator/secret.txt at commit 1601e87b5333789c926c8094cc49261b5f428b8d."
+     },
+     "ruleId": "generic-api-key",
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "secret-creator/secret.txt"
+        },
+        "region": {
+         "startLine": 6,
+         "startColumn": 11,
+         "endLine": 6,
+         "endColumn": 66,
+         "snippet": {
+          "text": "REDACTED"
+         }
+        }
+       }
+      }
+     ],
+     "partialFingerprints": {
+      "commitSha": "1601e87b5333789c926c8094cc49261b5f428b8d",
+      "email": "chinxman@users.noreply.github.com",
+      "author": "chinxman",
+      "date": "2026-03-24T19:38:46Z",
+      "commitMessage": "Initial commit"
+     },
+     "properties": {
+      "tags": []
+     }
+    }
+   ]
   }
  ]
 }

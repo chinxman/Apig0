@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -25,6 +27,7 @@ func NewReverseProxy(service config.ServiceConfig) gin.HandlerFunc {
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.Director = nil
 	proxy.Rewrite = func(req *httputil.ProxyRequest) {
 		strippedPath, strippedRawPath := rewriteProxyPath(req.In, service.Name)
 		req.SetURL(u)
@@ -34,11 +37,14 @@ func NewReverseProxy(service config.ServiceConfig) gin.HandlerFunc {
 		} else {
 			req.Out.URL.RawPath = ""
 		}
+		req.Out.Header.Del("Authorization")
+		req.Out.Header.Del("X-API-Key")
 		req.SetXForwarded()
 		applyServiceAuth(req.Out, service)
 	}
 	proxy.Transport = newRetryTransport(service)
 	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
+		log.Printf("[proxy] upstream transport failure service=%s upstream=%s method=%s path=%s err=%v", service.Name, service.BaseURL, req.Method, req.URL.Path, err)
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 	}
 
@@ -154,8 +160,21 @@ type retryTransport struct {
 }
 
 func newRetryTransport(service config.ServiceConfig) http.RoundTripper {
+	base := http.DefaultTransport
+	if defaultTransport, ok := http.DefaultTransport.(*http.Transport); ok {
+		cloned := defaultTransport.Clone()
+		if service.TLSSkipVerify {
+			if cloned.TLSClientConfig == nil {
+				cloned.TLSClientConfig = &tls.Config{}
+			} else {
+				cloned.TLSClientConfig = cloned.TLSClientConfig.Clone()
+			}
+			cloned.TLSClientConfig.InsecureSkipVerify = true
+		}
+		base = cloned
+	}
 	return &retryTransport{
-		base:    http.DefaultTransport,
+		base:    base,
 		service: service,
 	}
 }

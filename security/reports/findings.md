@@ -97,3 +97,16 @@ Recommended fix: Use `https://192.168.12.192:8989` for application-layer validat
 Patch status: Scope and evidence updated; HTTPS validation completed.
 Verification: `curl`, nmap, and a low-rate nuclei baseline subset completed against the authorized HTTPS URL/port.
 Residual risk: ZAP baseline remains unavailable locally.
+
+ID: APIG0-LIVE-002
+Title: Live `orders` route returns gateway-generated 502 due to upstream transport failure
+Severity: Medium
+Status: Needs Manual Review
+Affected file/path: Live target `orders` service configuration and upstream dependency behind `https://192.168.12.192:8989/orders`
+Evidence: Authorized token-backed requests to `GET /orders` and `GET /orders/` both returned `HTTP/2 502` with body `upstream unavailable`, while `GET /healthz` returned `HTTP/2 200` and `GET /api/user/info` confirmed the token is valid for service `orders`. Local code review shows both path variants normalize to same upstream path and the `upstream unavailable` body is emitted only by `proxy.NewReverseProxy` error handler on transport failure.
+Impact: Authorized users cannot reach the `orders` backend through Apig0, causing service unavailability for that route.
+Exploitability: No adversary action required; condition is consistent with deployment misconfiguration or failed upstream dependency such as unreachable host, refused connection, TLS handshake failure, or timeout.
+Recommended fix: Inspect live `orders` service `base_url`, upstream network reachability from gateway host, and upstream TLS trust chain. Add error-detail logging around reverse proxy transport failures so operators can distinguish dial, DNS, TLS, and timeout failures quickly.
+Patch status: Repo mitigation added for likely self-signed upstream case via opt-in per-service `tls_skip_verify` support plus proxy transport error logging; live target still needs operator-side configuration or upstream correction.
+Verification: `security/evidence/scans/live-https-orders-headers-20260513T030900Z.txt`, `security/evidence/scans/live-https-orders-body-20260513T030900Z.txt`, `security/evidence/scans/live-https-orders-slash-headers-20260513T030900Z.txt`, `security/evidence/scans/live-https-orders-slash-body-20260513T030900Z.txt`, `security/evidence/scans/live-https-orders-timing-20260513T030900Z.txt`, `security/evidence/scans/live-https-user-info-20260513T030900Z.json`
+Residual risk: Without access to live admin config or gateway host logs from the deployed instance, exact upstream failure mode remains unvalidated until the updated build is deployed and retested.

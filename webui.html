@@ -216,38 +216,30 @@
 
     <!-- ═══════════════════ PORTAL PAGE ═══════════════════ -->
     <div class="page active" id="page-portal">
-      <div class="welcome">
-        <h2 id="welcome-msg">Welcome</h2>
-        <p>Select a service and stage copy/paste-ready gateway commands for your own terminal.</p>
-      </div>
       <div class="portal-layout">
         <div class="portal-column portal-column-left">
-          <div class="section-title">Available Services</div>
+          <div class="section-title">Services</div>
           <div class="portal-services" id="portal-services">
             <div style="color:var(--text-dim);font-size:13px">Loading...</div>
           </div>
-          <div class="section-title">Session</div>
+          <div class="section-title">Access Status</div>
           <div class="session-card">
-            <div class="stat-item">
-              <div class="stat-val" style="color:var(--green)" id="sess-status">Active</div>
-              <div class="stat-label">Status</div>
+            <div class="session-status-line">
+              <span class="session-status-dot"></span>
+              <span class="session-status-text" id="sess-status">Active</span>
             </div>
-            <div class="stat-item">
-              <div class="stat-val" id="sess-user">-</div>
-              <div class="stat-label">User</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-val" id="sess-role">-</div>
-              <div class="stat-label">Role</div>
-            </div>
+            <div class="session-status-copy">Signed in and ready to use assigned gateway services.</div>
           </div>
         </div>
 
         <div class="portal-column portal-column-main">
           <div class="setup-card portal-generator-card">
-            <div class="users-toolbar" style="margin-bottom:12px">
-              <h2 id="portal-surface-title">API Access</h2>
-              <span class="service-muted" id="portal-selected-service-copy">Select a service to begin</span>
+            <div class="portal-surface-hero">
+              <div class="users-toolbar" style="margin-bottom:12px">
+                <h2 id="portal-surface-title">API Access</h2>
+                <span class="service-muted portal-selected-service-pill" id="portal-selected-service-copy">Select a service to begin</span>
+              </div>
+              <div class="portal-surface-subcopy">Fast access to assigned gateway endpoints with copy-ready actions.</div>
             </div>
             <div class="notice" id="portal-generator-notice"></div>
             <div class="portal-context-card" id="portal-pending-delivery-card" style="display:none;margin-bottom:12px">
@@ -259,18 +251,22 @@
               </div>
             </div>
             <div class="portal-generator-meta">
-              <div class="portal-generator-copy" id="portal-surface-copy">Use the assigned gateway key with the request generator below, then copy the command into curl, Postman, Bruno, or any client you prefer.</div>
+              <div class="portal-generator-copy" id="portal-surface-copy"></div>
               <div class="form-actions" id="portal-surface-actions">
-                <button class="btn-primary" data-action="portal-copy-command">Copy Command</button>
-                <button class="btn-ghost" data-action="portal-copy-endpoint">Copy Endpoint</button>
+                <button class="btn-primary" id="portal-copy-command-main" data-action="portal-copy-command">Copy Command</button>
+                <button class="btn-ghost" id="portal-copy-endpoint-main" data-action="portal-copy-endpoint">Copy Endpoint</button>
               </div>
             </div>
 
             <div id="portal-standard-interface">
-            <div class="portal-builder-grid">
+            <div class="portal-builder-grid portal-builder-grid-simple">
               <div class="portal-builder-form">
                 <div class="portal-empty-state" id="portal-service-empty">
-                  Waiting for an admin to create and assign a service. Once one is ready for this account, it will appear on the left ready to use.
+                  <div class="portal-empty-status">
+                    <span class="portal-empty-status-dot"></span>
+                    <span class="portal-empty-status-text">Awaiting service assignment</span>
+                  </div>
+                  <div class="portal-empty-copy">An admin has not assigned a service to this account yet. Once one is available, it will appear on the left ready to use.</div>
                 </div>
                 <div class="portal-service-ready" id="portal-service-ready">
                   <div class="form-group">
@@ -297,10 +293,6 @@
                       <span class="portal-mini-label">Method</span>
                       <strong class="portal-mini-value" id="portal-method-status">GET</strong>
                     </div>
-                  </div>
-                  <div class="form-actions">
-                    <button class="btn-primary" id="portal-copy-command-top" data-action="portal-copy-command">Copy Command</button>
-                    <button class="btn-ghost" id="portal-copy-endpoint-main" data-action="portal-copy-endpoint">Copy Endpoint</button>
                   </div>
                 </div>
 
@@ -351,67 +343,6 @@
                     </div>
                   </div>
                 </details>
-              </div>
-
-              <div class="portal-builder-side">
-                <details class="portal-helper-drawer">
-                  <summary class="portal-helper-summary">
-                    <span>Command Helpers</span>
-                    <span class="service-muted">Hidden until you open them</span>
-                  </summary>
-                  <div class="portal-helper-body">
-                    <div class="portal-context-card">
-                      <div class="portal-context-title">Quick Start</div>
-                      <div class="portal-context-copy" id="portal-context-copy">Choose a service, adjust method and path, then copy a command into your client or automation tool.</div>
-                    </div>
-                    <div class="portal-context-card">
-                      <div class="portal-context-title">Active Headers</div>
-                      <pre class="portal-context-block" id="portal-header-block">Authorization: Bearer &lt;paste-token&gt;</pre>
-                    </div>
-                    <div class="portal-context-card">
-                      <div class="portal-context-title">Shell Exports</div>
-                      <pre class="portal-context-block" id="portal-env-block">export APIG0_BASE="https://host:8989"
-export APIG0_SERVICE="service"
-export APIG0_TOKEN="paste-token"</pre>
-                    </div>
-                    <div class="portal-context-card">
-                      <div class="portal-context-title">Copy Targets</div>
-                      <pre class="portal-context-block">Copy Command
-Copy Headers
-Copy Auth Header
-Copy Endpoint</pre>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </div>
-
-          <div class="portal-response-grid">
-            <div class="setup-card portal-console-card">
-              <div class="users-toolbar" style="margin-bottom:12px">
-                <h2>Request Generator</h2>
-                <span class="service-muted" id="portal-response-meta">Copy-ready output</span>
-              </div>
-              <div class="portal-empty-state portal-token-empty" id="portal-terminal-empty">
-                No active gateway key is assigned to this account yet.
-              </div>
-              <details class="portal-preview-drawer" open>
-                <summary class="portal-helper-summary">
-                  <span>curl</span>
-                  <span class="service-muted">Generated request preview</span>
-                </summary>
-                <div class="portal-helper-body">
-                  <div class="portal-response-shell">
-                    <div class="portal-response-headers" id="portal-response-headers">Active request details will appear here.</div>
-                    <pre class="portal-response-body" id="portal-response-body">Choose a service to generate a command.</pre>
-                  </div>
-                </div>
-              </details>
-              <div class="form-actions" style="margin-top:12px">
-                <button class="btn-primary" id="portal-copy-command-button" data-action="portal-copy-command">Copy Command</button>
-                <button class="btn-ghost" data-action="portal-copy-headers">Copy Headers</button>
-                <button class="btn-ghost" data-action="portal-copy-auth-header">Copy Auth Header</button>
-                <button class="btn-ghost" data-action="portal-copy-endpoint">Copy Endpoint</button>
               </div>
             </div>
             </div>
@@ -684,6 +615,10 @@ Copy Endpoint</pre>
             <label>Secret Expires At</label>
             <input class="form-input" id="service-secret-expires" type="datetime-local">
           </div>
+        </div>
+        <div class="toggle-line" style="margin-top:4px">
+          <input type="checkbox" id="service-tls-skip-verify">
+          <label for="service-tls-skip-verify" style="cursor:pointer">Skip upstream TLS certificate verification for this API</label>
         </div>
         <div class="form-row">
           <div class="form-field" style="max-width:220px">
@@ -968,6 +903,19 @@ Copy Endpoint</pre>
       <div id="qr-canvas"></div>
       <div class="qr-uri" id="qr-uri"></div>
       <button class="btn-primary" style="width:100%" data-action="close-qr">Done</button>
+    </div>
+  </div>
+
+  <div class="qr-modal-bg" id="portal-copy-modal-bg">
+    <div class="qr-modal portal-copy-modal">
+      <h3 id="portal-copy-modal-title">Copied</h3>
+      <p id="portal-copy-modal-copy">Preview</p>
+      <pre class="portal-copy-modal-block" id="portal-copy-modal-value"></pre>
+      <div class="portal-copy-modal-reminder" id="portal-copy-modal-reminder"></div>
+      <div class="form-actions" style="margin-top:16px">
+        <button class="btn-primary" data-action="portal-copy-modal-copy">Copy Again</button>
+        <button class="btn-ghost" data-action="portal-close-copy-modal">Close</button>
+      </div>
     </div>
   </div>
 

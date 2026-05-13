@@ -3,19 +3,10 @@
   "Trivy": {
     "Version": "0.70.0"
   },
-  "ReportID": "019e0966-7efb-7806-9f3d-4360bb3b6fc2",
-  "CreatedAt": "2026-05-08T17:02:52.667527-04:00",
-  "ArtifactID": "sha256:8e2a60dd70e62b06de9a7b6644f4dc0070476a98207f4a3d25d6cdece09e94d1",
-  "ArtifactName": ".",
-  "ArtifactType": "repository",
-  "Metadata": {
-    "RepoURL": "https://github.com/chinxman/Apig0.git",
-    "Branch": "security-readiness-evidence-pass",
-    "Commit": "27b82f0c88ef1271148755223bfb883a19d87328",
-    "CommitMsg": "Remediate Penligent security findings",
-    "Author": "chinxman \u003cdevinamarorodriguez@gmail.com\u003e",
-    "Committer": "chinxman \u003cdevinamarorodriguez@gmail.com\u003e"
-  },
+  "ReportID": "019e056d-b367-7d9c-8e8a-c83c4f4bcb78",
+  "CreatedAt": "2026-05-07T22:32:15.975893-04:00",
+  "ArtifactName": "/private/tmp/apig0-scan.BAgIDl",
+  "ArtifactType": "filesystem",
   "Results": [
     {
       "Target": "go.mod",
@@ -586,6 +577,110 @@
           "Indirect": true,
           "Relationship": "indirect",
           "AnalyzedBy": "gomod"
+        }
+      ]
+    },
+    {
+      "Target": "secret-creator/go.mod",
+      "Class": "lang-pkgs",
+      "Type": "gomod",
+      "Packages": [
+        {
+          "ID": "secret-creator",
+          "Name": "secret-creator",
+          "Identifier": {
+            "PURL": "pkg:golang/secret-creator",
+            "UID": "c84ec4ea4ce0b818"
+          },
+          "Relationship": "root",
+          "DependsOn": [
+            "github.com/skip2/go-qrcode@v0.0.0-20200617195104-da1b6568686e"
+          ],
+          "AnalyzedBy": "gomod"
+        },
+        {
+          "ID": "github.com/skip2/go-qrcode@v0.0.0-20200617195104-da1b6568686e",
+          "Name": "github.com/skip2/go-qrcode",
+          "Identifier": {
+            "PURL": "pkg:golang/github.com/skip2/go-qrcode@v0.0.0-20200617195104-da1b6568686e",
+            "UID": "6c40046daa036b03"
+          },
+          "Version": "v0.0.0-20200617195104-da1b6568686e",
+          "Licenses": [
+            "MIT"
+          ],
+          "Relationship": "direct",
+          "AnalyzedBy": "gomod"
+        }
+      ]
+    },
+    {
+      "Target": "certs/apig0-key.pem",
+      "Class": "secret",
+      "Secrets": [
+        {
+          "RuleID": "private-key",
+          "Category": "AsymmetricPrivateKey",
+          "Severity": "HIGH",
+          "Title": "Asymmetric Private Key",
+          "StartLine": 2,
+          "EndLine": 4,
+          "Code": {
+            "Lines": [
+              {
+                "Number": 1,
+                "Content": "-----BEGIN EC PRIVATE KEY-----",
+                "IsCause": false,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "-----BEGIN EC PRIVATE KEY-----",
+                "FirstCause": false,
+                "LastCause": false
+              },
+              {
+                "Number": 2,
+                "Content": "****************************************************************",
+                "IsCause": true,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "****************************************************************",
+                "FirstCause": true,
+                "LastCause": false
+              },
+              {
+                "Number": 3,
+                "Content": "****************************************************************",
+                "IsCause": true,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "****************************************************************",
+                "FirstCause": false,
+                "LastCause": false
+              },
+              {
+                "Number": 4,
+                "Content": "************************************",
+                "IsCause": true,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "************************************",
+                "FirstCause": false,
+                "LastCause": true
+              },
+              {
+                "Number": 5,
+                "Content": "-----END EC PRIVATE KEY-----",
+                "IsCause": false,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "-----END EC PRIVATE KEY-----",
+                "FirstCause": false,
+                "LastCause": false
+              }
+            ]
+          },
+          "Match": "****************************************************************",
+          "Offset": 31
         }
       ]
     }

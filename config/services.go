@@ -27,6 +27,7 @@ type ServiceConfig struct {
 	AuthType      ServiceAuthType `json:"auth_type"`
 	HeaderName    string          `json:"header_name,omitempty"`
 	BasicUsername string          `json:"basic_username,omitempty"`
+	TLSSkipVerify bool            `json:"tls_skip_verify,omitempty"`
 	Provider      string          `json:"provider,omitempty"`
 	OpenAICompat  bool            `json:"openai_compatible,omitempty"`
 	TimeoutMS     int             `json:"timeout_ms,omitempty"`

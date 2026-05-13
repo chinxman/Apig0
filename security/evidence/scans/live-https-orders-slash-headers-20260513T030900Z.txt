@@ -1,0 +1,18 @@
+HTTP/2 502 
+content-security-policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+content-type: text/plain; charset=utf-8
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+referrer-policy: strict-origin-when-cross-origin
+set-cookie: apig0_csrf=c0f0558cea36d89b68929e46c50e9a744cc67306717d8bd0a7e9d6ef4e298f3f; Path=/; Max-Age=86400; Secure; SameSite=Strict
+strict-transport-security: max-age=31536000
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-ratelimit-burst: 10
+x-ratelimit-limit: 60
+x-ratelimit-window: 60
+x-xss-protection: 0
+content-length: 21
+date: Wed, 13 May 2026 03:07:42 GMT
+

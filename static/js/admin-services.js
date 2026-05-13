@@ -53,7 +53,9 @@
       tr.innerHTML =
         "<td><strong style=\"color:var(--purple)\">" + util.escHtml(svc.name) + "</strong></td>" +
         '<td style="color:var(--text-dim);max-width:360px;word-break:break-all">' + util.escHtml(svc.base_url || "-") + "</td>" +
-        "<td>" + util.escHtml(svc.auth_type || "none") + (svc.openai_compatible ? '<div class="service-muted" style="margin-top:4px">openai • ' + util.escHtml(svc.provider || "custom") + "</div>" : "") + "</td>" +
+        "<td>" + util.escHtml(svc.auth_type || "none") +
+        (svc.tls_skip_verify ? '<div class="service-muted" style="margin-top:4px">tls verify: skipped</div>' : "") +
+        (svc.openai_compatible ? '<div class="service-muted" style="margin-top:4px">openai • ' + util.escHtml(svc.provider || "custom") + "</div>" : "") + "</td>" +
         "<td>" + util.escHtml(String(svc.retry_count || 0)) + " • " + util.escHtml(String(svc.timeout_ms || 10000)) + "ms</td>" +
         "<td>" + secretCell + "</td>" +
         "<td>" + (svc.enabled
@@ -115,6 +117,7 @@
     dom.id("service-secret-expires").value = "";
     dom.id("service-secret-notes").value = "";
     dom.id("service-clear-secret").checked = false;
+    dom.id("service-tls-skip-verify").checked = false;
     dom.show("service-clear-secret-wrap", "none");
     dom.id("service-timeout-ms").value = "10000";
     dom.id("service-retry-count").value = "0";
@@ -160,6 +163,7 @@
     dom.id("service-secret-expires").value = util.isoInputValue(meta.expires_at);
     dom.id("service-secret-notes").value = meta.notes || "";
     dom.id("service-clear-secret").checked = false;
+    dom.id("service-tls-skip-verify").checked = !!svc.tls_skip_verify;
     dom.show("service-clear-secret-wrap", svc.has_secret ? "flex" : "none");
     dom.id("service-enabled").checked = !!svc.enabled;
     updateServiceAuthFields();
@@ -175,6 +179,7 @@
       auth_type: dom.id("service-auth-type").value,
       header_name: dom.id("service-header-name").value.trim(),
       basic_username: dom.id("service-basic-username").value.trim(),
+      tls_skip_verify: dom.id("service-tls-skip-verify").checked,
       provider: dom.id("service-provider").value,
       openai_compatible: dom.id("service-openai-compatible").checked,
       timeout_ms: parseInt(dom.id("service-timeout-ms").value, 10) || 10000,

@@ -27,3 +27,18 @@ func TestValidateServiceBaseURLRejectsUnsafeForms(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeServiceConfigPreservesTLSSkipVerify(t *testing.T) {
+	svc, ok := normalizeServiceConfig(ServiceConfig{
+		Name:          "orders",
+		BaseURL:       "https://orders.internal",
+		TLSSkipVerify: true,
+		Enabled:       true,
+	})
+	if !ok {
+		t.Fatal("expected service config to normalize")
+	}
+	if !svc.TLSSkipVerify {
+		t.Fatal("expected tls skip verify flag to persist")
+	}
+}

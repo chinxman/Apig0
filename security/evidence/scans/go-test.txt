@@ -1,6 +1,6 @@
-ok  	apig0	0.500s
-ok  	apig0/auth	1.581s
+ok  	apig0	(cached)
+ok  	apig0/auth	(cached)
 ?   	apig0/cli	[no test files]
-ok  	apig0/config	0.593s
-ok  	apig0/middleware	1.574s
-ok  	apig0/proxy	0.897s
+ok  	apig0/config	(cached)
+ok  	apig0/middleware	(cached)
+ok  	apig0/proxy	(cached)
